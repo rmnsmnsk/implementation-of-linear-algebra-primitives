@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include<math.h>
 
 COO *sort_matrix(COO *matrix) {
   if (matrix == NULL) {
@@ -294,4 +295,108 @@ COO *multiplication_vector_and_matrix(COO *first, COO *second) {
 
   free(temp_vals);
   return result;
+}
+
+void coo_map(COO* mat, float (*func)(float)){
+  if (mat == NULL || func == NULL || mat -> nnz == 0){
+    return;
+  }
+  for (int i = 0; i < mat->nnz; ++i){
+    mat->values[i] = func(mat -> values[i]);
+  }
+  return;
+}
+
+COO* coo_map2(COO* first, COO* second, float (*func)(float, float)){
+    first = sort_matrix(first);
+    second = sort_matrix(second);
+    int max = first -> nnz + second -> nnz;
+    COO* result = malloc(sizeof(COO));
+    if (result == NULL || (first -> rows != second -> rows) || (first -> columns != second -> columns)){
+      return NULL;
+    }
+    int* result_row_indices = malloc(sizeof(int) * max);
+    if (result_row_indices ==   NULL){
+      free(result);
+      return NULL;
+    }
+    int* result_coll_indices = malloc(sizeof(int) * max);
+    if (result_coll_indices ==  NULL){
+      free(result);
+      free(result_row_indices);
+      return NULL;
+    }
+    float* result_values = malloc(sizeof(float) * max);
+    if (result_values == NULL){
+      free(result);
+      free(result_row_indices);
+      free(result_coll_indices);
+      return NULL;
+    }
+    int count = 0;
+    int i = 0;
+    int j = 0;
+    while (i < first -> nnz && j < second -> nnz){
+      if ((first -> rows_indices[i] == second -> rows_indices[j]) && (first -> coll_indices[i] == second -> coll_indices[j])){
+        float value = func(first->values[i], second->values[j]);
+        if (value != 0.0f && !isnan(value) && !isinf(value)){
+          result_values[count] = value;
+          result_row_indices[count] = first -> rows_indices[i];
+          result_coll_indices[count] = first -> coll_indices[i];
+          count++;
+        }
+        i++;
+        j++;
+      }
+      else if (first->rows_indices[i] < second->rows_indices[j] || (first->rows_indices[i] == second->rows_indices[j] && first->coll_indices[i] < second->coll_indices[j])){
+        float value = func(first -> values[i], 0.0f);
+        if (value != 0.0f && !isnan(value) && !isinf(value)){
+          result_values[count] = value;
+          result_row_indices[count] = first -> rows_indices[i];
+          result_coll_indices[count] = first -> coll_indices[i];
+          count++;
+        }
+        i++;
+      }
+      else{
+        float value = func(0.0f, second -> values[j]);
+        if (value != 0.0f && !isnan(value) && !isinf(value)){
+          result_values[count] = value;
+          result_row_indices[count] = second -> rows_indices[j];
+          result_coll_indices[count] = second -> coll_indices[j];
+          count++;
+        }
+        j++;
+      }
+    }
+    while (i < first->nnz) {
+      float val = func(first->values[i], 0.0f);
+      if (val != 0.0f && !isnan(val) && !isinf(val)){
+        result_values[count] = val;
+        result_row_indices[count] = first -> rows_indices[i];
+        result_coll_indices[count] = first -> coll_indices[i];
+        count++;
+      }
+      i++;
+    }
+    while (j < second->nnz) {
+      float val = func(0.0f, second->values[j]);
+      if (val != 0.0f && !isnan(val) && !isinf(val)){
+        result_values[count] = val;
+        result_row_indices[count] = second -> rows_indices[j];
+        result_coll_indices[count] = second -> coll_indices[j];
+        count++;
+      }
+      j++;
+    }
+    result_row_indices = realloc(result_row_indices, count * sizeof(int));
+    result_coll_indices = realloc(result_coll_indices, count * sizeof(int));
+    result_values = realloc(result_values, count * sizeof(float));
+    result -> rows_indices = result_row_indices;
+    result -> coll_indices = result_coll_indices;
+    result -> values = result_values;
+    result -> columns = first -> columns;
+    result -> rows = first -> rows;
+    result -> nnz = count;
+    return result;
 }

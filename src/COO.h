@@ -12,3 +12,5 @@ typedef struct COO {
 COO *multiplication_two_matrix(COO *first, COO *second);
 COO *multiplication_matrix_and_vector(COO *first, COO *second);
 COO *multiplication_vector_and_matrix(COO *first, COO *second);
+void coo_map(COO* mat, float (*func)(float));
+COO* coo_map2(COO* first, COO* second, float (*func)(float, float));
