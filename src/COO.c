@@ -4,6 +4,35 @@
 #include <stdlib.h>
 #include<math.h>
 
+COO* create_matrix_copy(COO *original) {
+  if (original == NULL) return NULL;
+
+  COO *copy = malloc(sizeof(COO));
+  if (copy == NULL) return NULL;
+
+  copy->nnz = original->nnz;
+  copy->rows = original->rows;
+  copy->columns = original->columns;
+
+  copy->rows_indices = malloc(sizeof(int) * original->nnz);
+  copy->coll_indices = malloc(sizeof(int) * original->nnz);
+  copy->values = malloc(sizeof(float) * original->nnz);
+
+  if (copy->rows_indices == NULL || copy->coll_indices == NULL || copy->values == NULL) {
+    free_matrix(copy);
+    return NULL;
+  }
+
+  for (int i = 0; i < original->nnz; i++) {
+    copy->rows_indices[i] = original->rows_indices[i];
+    copy->coll_indices[i] = original->coll_indices[i];
+    copy->values[i] = original->values[i];
+  }
+
+  return copy;
+}
+
+
 COO *sort_matrix(COO *matrix) {
   if (matrix == NULL) {
     return NULL;
@@ -81,16 +110,16 @@ bool is_line(COO *matrix) {
 }
 
 float *make_table_vector(COO *vector) {
-  if (vector == NULL) {
-    return NULL;
-  }
-  if (vector->rows_indices == NULL || vector->coll_indices == NULL || vector->values == NULL) return NULL;
+    if (vector == NULL) return NULL;
 
-  float *vector_values = calloc(vector->rows, sizeof(float));
-  for (int i = 0; i < vector->nnz; ++i) {
-    vector_values[vector->rows_indices[i]] = vector->values[i];
-  }
-  return vector_values;
+    int size = (vector->rows == 1) ? vector->columns : vector->rows;
+    float *vector_values = calloc(size, sizeof(float));
+
+    for (int i = 0; i < vector->nnz; ++i) {
+        int idx = (vector->rows == 1) ? vector->coll_indices[i] : vector->rows_indices[i];
+        vector_values[idx] = vector->values[i];
+    }
+    return vector_values;
 }
 
 COO *multiplication_two_matrix(COO *first, COO *second) {
