@@ -1,3 +1,0 @@
-/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/build/CMakeFiles/tests.dir
-/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/build/CMakeFiles/edit_cache.dir
-/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/build/CMakeFiles/rebuild_cache.dir
