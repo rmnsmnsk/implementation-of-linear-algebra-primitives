@@ -56,7 +56,7 @@ bool matrices_equal(COO *m1, COO *m2) {
   for (int i = 0; i < m1->nnz; i++) {
     if (m1->rows_indices[i] != m2->rows_indices[i] ||
         m1->coll_indices[i] != m2->coll_indices[i] ||
-        fabs(m1->values[i] - m2->values[i]) > 1e-5) {
+        fabsf(m1->values[i] - m2->values[i]) > 1e-5f) {
       return false;
     }
   }
@@ -66,7 +66,7 @@ bool matrices_equal(COO *m1, COO *m2) {
 void test_sort_matrix() {
   int row_indices[] = {2, 0, 1, 0};
   int col_indices[] = {1, 2, 0, 0};
-  float values[] = {5.0, 1.0, 3.0, 2.0};
+  float values[] = {5.0f, 1.0f, 3.0f, 2.0f};
 
   COO *matrix = create_matrix(4, 3, 3, row_indices, col_indices, values);
   assert(matrix != NULL);
@@ -75,13 +75,13 @@ void test_sort_matrix() {
   assert(sorted != NULL);
 
   assert(sorted->rows_indices[0] == 0 && sorted->coll_indices[0] == 0 &&
-         fabs(sorted->values[0] - 2.0) < 1e-5);
+         fabsf(sorted->values[0] - 2.0f) < 1e-5f);
   assert(sorted->rows_indices[1] == 0 && sorted->coll_indices[1] == 2 &&
-         fabs(sorted->values[1] - 1.0) < 1e-5);
+         fabsf(sorted->values[1] - 1.0f) < 1e-5f);
   assert(sorted->rows_indices[2] == 1 && sorted->coll_indices[2] == 0 &&
-         fabs(sorted->values[2] - 3.0) < 1e-5);
+         fabsf(sorted->values[2] - 3.0f) < 1e-5f);
   assert(sorted->rows_indices[3] == 2 && sorted->coll_indices[3] == 1 &&
-         fabs(sorted->values[3] - 5.0) < 1e-5);
+         fabsf(sorted->values[3] - 5.0f) < 1e-5f);
 
   assert(sort_matrix(NULL) == NULL);
 
@@ -91,13 +91,13 @@ void test_sort_matrix() {
 void test_is_line() {
   int row_indices[] = {0, 0, 0};
   int col_indices[] = {0, 1, 2};
-  float values[] = {1.0, 2.0, 3.0};
+  float values[] = {1.0f, 2.0f, 3.0f};
   COO *row_vector = create_matrix(3, 1, 3, row_indices, col_indices, values);
   assert(is_line(row_vector) == true);
 
   int row_indices2[] = {0, 1, 2};
   int col_indices2[] = {0, 1, 2};
-  float values2[] = {1.0, 2.0, 3.0};
+  float values2[] = {1.0f, 2.0f, 3.0f};
   COO *matrix = create_matrix(3, 3, 3, row_indices2, col_indices2, values2);
   assert(is_line(matrix) == false);
 
@@ -108,14 +108,14 @@ void test_is_line() {
 void test_make_table_vector() {
   int row_indices[] = {0, 2, 1};
   int col_indices[] = {0, 0, 0};
-  float values[] = {1.0, 3.0, 2.0};
+  float values[] = {1.0f, 3.0f, 2.0f};
   COO *vector = create_matrix(3, 3, 1, row_indices, col_indices, values);
 
   float *table = make_table_vector(vector);
   assert(table != NULL);
-  assert(fabs(table[0] - 1.0) < 1e-5);
-  assert(fabs(table[1] - 2.0) < 1e-5);
-  assert(fabs(table[2] - 3.0) < 1e-5);
+  assert(fabsf(table[0] - 1.0f) < 1e-5f);
+  assert(fabsf(table[1] - 2.0f) < 1e-5f);
+  assert(fabsf(table[2] - 3.0f) < 1e-5f);
 
   free(table);
   free_matrix(vector);
@@ -124,12 +124,12 @@ void test_make_table_vector() {
 void test_multiplication_two_matrix() {
   int row_a[] = {0, 0, 1, 1};
   int col_a[] = {0, 2, 1, 2};
-  float val_a[] = {1.0, 2.0, 3.0, 4.0};
+  float val_a[] = {1.0f, 2.0f, 3.0f, 4.0f};
   COO *A = create_matrix(4, 2, 3, row_a, col_a, val_a);
 
   int row_b[] = {0, 1, 2, 2};
   int col_b[] = {0, 1, 0, 1};
-  float val_b[] = {5.0, 6.0, 7.0, 8.0};
+  float val_b[] = {5.0f, 6.0f, 7.0f, 8.0f};
   COO *B = create_matrix(4, 3, 2, row_b, col_b, val_b);
 
   COO *result = multiplication_two_matrix(A, B);
@@ -157,10 +157,10 @@ void test_multiplication_two_matrix() {
     }
   }
 
-  assert(fabs(found_00 - 19.0) < 1e-5);
-  assert(fabs(found_01 - 16.0) < 1e-5);
-  assert(fabs(found_10 - 28.0) < 1e-5);
-  assert(fabs(found_11 - 50.0) < 1e-5);
+  assert(fabsf(found_00 - 19.0f) < 1e-5f);
+  assert(fabsf(found_01 - 16.0f) < 1e-5f);
+  assert(fabsf(found_10 - 28.0f) < 1e-5f);
+  assert(fabsf(found_11 - 50.0f) < 1e-5f);
 
   free_matrix(A);
   free_matrix(B);
@@ -170,12 +170,12 @@ void test_multiplication_two_matrix() {
 void test_multiplication_matrix_and_vector() {
   int row_a[] = {0, 0, 1, 1};
   int col_a[] = {0, 1, 0, 1};
-  float val_a[] = {2.0, 3.0, 4.0, 5.0};
+  float val_a[] = {2.0f, 3.0f, 4.0f, 5.0f};
   COO *A = create_matrix(4, 2, 2, row_a, col_a, val_a);
 
   int row_v[] = {0, 1};
   int col_v[] = {0, 0};
-  float val_v[] = {1.0, 2.0};
+  float val_v[] = {1.0f, 2.0f};
   COO *V = create_matrix(2, 2, 1, row_v, col_v, val_v);
 
   COO *result = multiplication_matrix_and_vector(A, V);
@@ -187,9 +187,9 @@ void test_multiplication_matrix_and_vector() {
   assert(result->nnz == 2);
 
   assert(result->rows_indices[0] == 0 && result->coll_indices[0] == 0 &&
-         fabs(result->values[0] - 8.0) < 1e-5);
+         fabsf(result->values[0] - 8.0f) < 1e-5f);
   assert(result->rows_indices[1] == 1 && result->coll_indices[1] == 0 &&
-         fabs(result->values[1] - 14.0) < 1e-5);
+         fabsf(result->values[1] - 14.0f) < 1e-5f);
 
   free_matrix(A);
   free_matrix(V);
@@ -199,12 +199,12 @@ void test_multiplication_matrix_and_vector() {
 void test_multiplication_vector_and_matrix() {
   int row_v[] = {0, 0};
   int col_v[] = {0, 1};
-  float val_v[] = {1.0, 2.0};
+  float val_v[] = {1.0f, 2.0f};
   COO *V = create_matrix(2, 1, 2, row_v, col_v, val_v);
 
   int row_a[] = {0, 0, 1, 1};
   int col_a[] = {0, 1, 0, 1};
-  float val_a[] = {2.0, 3.0, 4.0, 5.0};
+  float val_a[] = {2.0f, 3.0f, 4.0f, 5.0f};
   COO *A = create_matrix(4, 2, 2, row_a, col_a, val_a);
 
   COO *result = multiplication_vector_and_matrix(V, A);
@@ -216,9 +216,9 @@ void test_multiplication_vector_and_matrix() {
   assert(result->nnz == 2);
 
   assert(result->rows_indices[0] == 0 && result->coll_indices[0] == 0 &&
-         fabs(result->values[0] - 10.0) < 1e-5);
+         fabsf(result->values[0] - 10.0f) < 1e-5f);
   assert(result->rows_indices[1] == 0 && result->coll_indices[1] == 1 &&
-         fabs(result->values[1] - 13.0) < 1e-5);
+         fabsf(result->values[1] - 13.0f) < 1e-5f);
 
   free_matrix(V);
   free_matrix(A);
@@ -230,14 +230,14 @@ float square(float x) { return x * x; }
 void test_coo_map() {
   int row_indices[] = {0, 1, 2};
   int col_indices[] = {0, 1, 2};
-  float values[] = {2.0, 3.0, 4.0};
+  float values[] = {2.0f, 3.0f, 4.0f};
   COO *matrix = create_matrix(3, 3, 3, row_indices, col_indices, values);
 
   coo_map(matrix, square);
 
-  assert(fabs(matrix->values[0] - 4.0) < 1e-5);
-  assert(fabs(matrix->values[1] - 9.0) < 1e-5);
-  assert(fabs(matrix->values[2] - 16.0) < 1e-5);
+  assert(fabsf(matrix->values[0] - 4.0f) < 1e-5f);
+  assert(fabsf(matrix->values[1] - 9.0f) < 1e-5f);
+  assert(fabsf(matrix->values[2] - 16.0f) < 1e-5f);
 
   free_matrix(matrix);
 }
@@ -249,12 +249,12 @@ float multiply(float a, float b) { return a * b; }
 void test_coo_map2() {
   int row1[] = {0, 0, 1, 2};
   int col1[] = {0, 1, 1, 2};
-  float val1[] = {1.0, 2.0, 3.0, 4.0};
+  float val1[] = {1.0f, 2.0f, 3.0f, 4.0f};
   COO *A = create_matrix(4, 3, 3, row1, col1, val1);
 
   int row2[] = {0, 1, 1, 2};
   int col2[] = {0, 1, 2, 2};
-  float val2[] = {5.0, 6.0, 7.0, 8.0};
+  float val2[] = {5.0f, 6.0f, 7.0f, 8.0f};
   COO *B = create_matrix(4, 3, 3, row2, col2, val2);
 
   COO *result = coo_map2(A, B, add);
@@ -266,15 +266,15 @@ void test_coo_map2() {
 
   assert(result->nnz == 5);
   assert(result->rows_indices[0] == 0 && result->coll_indices[0] == 0 &&
-         fabs(result->values[0] - 6.0) < 1e-5);
+         fabsf(result->values[0] - 6.0f) < 1e-5f);
   assert(result->rows_indices[1] == 0 && result->coll_indices[1] == 1 &&
-         fabs(result->values[1] - 2.0) < 1e-5);
+         fabsf(result->values[1] - 2.0f) < 1e-5f);
   assert(result->rows_indices[2] == 1 && result->coll_indices[2] == 1 &&
-         fabs(result->values[2] - 9.0) < 1e-5);
+         fabsf(result->values[2] - 9.0f) < 1e-5f);
   assert(result->rows_indices[3] == 1 && result->coll_indices[3] == 2 &&
-         fabs(result->values[3] - 7.0) < 1e-5);
+         fabsf(result->values[3] - 7.0f) < 1e-5f);
   assert(result->rows_indices[4] == 2 && result->coll_indices[4] == 2 &&
-         fabs(result->values[4] - 12.0) < 1e-5);
+         fabsf(result->values[4] - 12.0f) < 1e-5f);
 
   free_matrix(A);
   free_matrix(B);

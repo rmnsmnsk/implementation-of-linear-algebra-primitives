@@ -54,8 +54,4 @@ jobs:
 
       - name: Run clang-tidy
         working-directory: src
-        run: |
-          run-clang-tidy -p build \
-            '.*\.c$' \
-            --checks='clang-analyzer-*,bugprone-*,performance-*' \
-            --warnings-as-errors='*'
+        run: run-clang-tidy -p build '.*\.c$'

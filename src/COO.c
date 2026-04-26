@@ -474,12 +474,33 @@ COO *coo_map2(COO *first, COO *second, float (*func)(float, float)) {
     result->coll_indices = NULL;
     result->values = NULL;
   } else {
-    result_row_indices = realloc(result_row_indices, count * sizeof(int));
-    result_coll_indices = realloc(result_coll_indices, count * sizeof(int));
-    result_values = realloc(result_values, count * sizeof(float));
-    result->rows_indices = result_row_indices;
-    result->coll_indices = result_coll_indices;
-    result->values = result_values;
+    int *new_rows = realloc(result_row_indices, count * sizeof(int));
+    if (new_rows == NULL) {
+      free(result_row_indices);
+      free(result_coll_indices);
+      free(result_values);
+      free(result);
+      return NULL;
+    }
+    int *new_cols = realloc(result_coll_indices, count * sizeof(int));
+    if (new_cols == NULL) {
+      free(new_rows);
+      free(result_coll_indices);
+      free(result_values);
+      free(result);
+      return NULL;
+    }
+    float *new_vals = realloc(result_values, count * sizeof(float));
+    if (new_vals == NULL) {
+      free(new_rows);
+      free(new_cols);
+      free(result_values);
+      free(result);
+      return NULL;
+    }
+    result->rows_indices = new_rows;
+    result->coll_indices = new_cols;
+    result->values = new_vals;
   }
   result->columns = first->columns;
   result->rows = first->rows;
