@@ -1,4 +1,4 @@
-#include "../c_impl/COO.h"
+#include "COO.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,12 +7,13 @@
 static inline double get_time(void) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return tv.tv_sec + tv.tv_usec * 1e-6;
+  return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
 }
 
 COO *generate_random_coo(int rows, int cols, float density, unsigned seed) {
   srand(seed);
-  int nnz = (int)(rows * cols * density);
+  int nnz = (int)((float)rows * (float)cols * density);
+
   COO *mat = malloc(sizeof(COO));
   mat->rows = rows;
   mat->columns = cols;
@@ -20,6 +21,7 @@ COO *generate_random_coo(int rows, int cols, float density, unsigned seed) {
   mat->rows_indices = malloc(sizeof(int) * nnz);
   mat->coll_indices = malloc(sizeof(int) * nnz);
   mat->values = malloc(sizeof(float) * nnz);
+
   for (int i = 0; i < nnz; i++) {
     mat->rows_indices[i] = rand() % rows;
     mat->coll_indices[i] = rand() % cols;
@@ -81,7 +83,7 @@ int main(int argc, char **argv) {
   }
 
   int size = atoi(argv[1]);
-  float density = atof(argv[2]);
+  float density = (float)atof(argv[2]);
   const char *op = argv[3];
 
   double result;

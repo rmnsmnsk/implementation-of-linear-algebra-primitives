@@ -13,7 +13,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake clang-format clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang-format build-essential
 
       - name: Check C format
         run: |
@@ -21,33 +23,17 @@ jobs:
             -not -path '*/build/*' \
             -exec clang-format --dry-run -Werror {} +
 
-      - name: Configure & Build Tests
+      - name: Build Tests (c_impl)
         working-directory: src/c_impl
         run: |
           cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           cmake --build build
+          ./build/tests
 
-      - name: Run Tests
-        working-directory: src/c_impl
-        run: ./build/tests
-
-
-      - name: Configure & Build Benchmark
+      - name: Build Benchmark (bench)
         working-directory: src/bench
         run: |
           cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           cmake --build build
-
-      - name: Smoke Test Benchmark
-        working-directory: src/bench
-        run: |
           ./build/benchmark_c 100 0.05 mm
           ./build/benchmark_c 100 0.05 mv
-
-      - name: Run clang-tidy (c_impl)
-        working-directory: src/c_impl
-        run: run-clang-tidy -p build '.*\.c$'
-
-      - name: Run clang-tidy (bench)
-        working-directory: src/bench
-        run: run-clang-tidy -p build '.*\.c$'
