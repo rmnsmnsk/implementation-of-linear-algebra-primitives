@@ -507,3 +507,11 @@ COO *coo_map2(COO *first, COO *second, float (*func)(float, float)) {
   result->nnz = count;
   return result;
 }
+
+void free_matrix(COO *matrix) {
+    if (matrix == NULL) return;
+    free(matrix->rows_indices);
+    free(matrix->coll_indices);
+    free(matrix->values);
+    free(matrix);
+}
