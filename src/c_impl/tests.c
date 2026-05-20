@@ -5,15 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void free_matrix(COO *matrix) {
-  if (matrix) {
-    free(matrix->rows_indices);
-    free(matrix->coll_indices);
-    free(matrix->values);
-    free(matrix);
-  }
-}
-
 COO *create_matrix(int nnz, int rows, int cols, int *row_indices,
                    int *col_indices, float *values) {
   COO *matrix = (COO *)malloc(sizeof(COO));
