@@ -7,51 +7,47 @@ on:
     branches: [ main, master ]
 
 jobs:
-  format-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
-
-      - name: Check C format (src/)
-        run: |
-          find src -type f \( -name '*.c' -o -name '*.h' \) \
-            -exec clang-format --dry-run -Werror {} +
-
   build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake clang-format clang-tidy
 
-      - name: Configure CMake
-        working-directory: src
-        run: cmake -B build
+      - name: Check C format
+        run: |
+          find src/c_impl src/bench -type f \( -name '*.c' -o -name '*.h' \) \
+            -not -path '*/build/*' \
+            -exec clang-format --dry-run -Werror {} +
 
-      - name: Build
-        working-directory: src
-        run: cmake --build build
+      - name: Configure & Build Tests
+        working-directory: src/c_impl
+        run: |
+          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          cmake --build build
 
-      - name: Run tests
-        working-directory: src
+      - name: Run Tests
+        working-directory: src/c_impl
         run: ./build/tests
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Configure & Build Benchmark
+        working-directory: src/bench
+        run: |
+          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          cmake --build build
 
-      - name: Configure CMake with compilation database
-        working-directory: src
-        run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Smoke Test Benchmark
+        working-directory: src/bench
+        run: |
+          ./build/benchmark_c 100 0.05 mm
+          ./build/benchmark_c 100 0.05 mv
 
-      - name: Run clang-tidy
-        working-directory: src
+      - name: Run clang-tidy (c_impl)
+        working-directory: src/c_impl
+        run: run-clang-tidy -p build '.*\.c$'
+
+      - name: Run clang-tidy (bench)
+        working-directory: src/bench
         run: run-clang-tidy -p build '.*\.c$'
