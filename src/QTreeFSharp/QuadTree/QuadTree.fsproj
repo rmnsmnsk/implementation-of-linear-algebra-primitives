@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Common.fs"/>
+        <Compile Include="Result.fs"/>
+        <Compile Include="Vector.fs"/>
+        <Compile Include="Matrix.fs"/>
+        <Compile Include="LinearAlgebra.fs"/>
+        <Compile Include="BFS.fs"/>
+        <Compile Include="TriangleCount.fs"/>
+        <Compile Include="SSSP.fs"/>
+        <Compile Include="Boruvka.fs"/>
+    </ItemGroup>
+
+</Project>
