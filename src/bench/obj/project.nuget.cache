@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "Fs8b7c3ns9BKC5ny8aPTou0UrDMKCtSC/Yomnyze0u17uVNTsB7XaMiyz+xDxSBAoReNNLwgsSK4iAHDShx8BA==",
+  "success": true,
+  "projectFilePath": "/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/QTreeBench.fsproj",
+  "expectedPackageFiles": [
+    "/home/roman/.nuget/packages/fsharp.core/8.0.102/fsharp.core.8.0.102.nupkg.sha512"
+  ],
+  "logs": []
+}

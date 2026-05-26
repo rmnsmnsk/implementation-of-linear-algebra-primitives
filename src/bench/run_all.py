@@ -6,6 +6,20 @@ RESULTS_PATH = "results.json"
 TESTS = [(100, 0.05), (500, 0.02), (1000, 0.01)]
 OPS = ["mm", "mv"]
 
+REAL_MATRICES = [
+    ("matrices/curtis54.mtx", "curtis54"),
+    ("matrices/cage4.mtx", "cage4"),
+    ("matrices/lp_afiro.mtx", "lp_afiro"),
+]
+
+def run_c_from_file(matrix_path, op):
+    cmd = ["./build/benchmark_c", matrix_path, op, "--mtx"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return float(proc.stdout.strip())
+    except:
+        return None
+
 def run_c(size, density, op):
     cmd = ["./build/benchmark_c", str(size), str(density), op]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

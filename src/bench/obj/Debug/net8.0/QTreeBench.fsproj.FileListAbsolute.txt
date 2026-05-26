@@ -1,0 +1,5 @@
+/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/obj/Debug/net8.0/QTreeBench.fsproj.AssemblyReference.cache
+/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/obj/Debug/net8.0/QTreeBench.AssemblyInfoInputs.cache
+/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/obj/Debug/net8.0/QTreeBench.AssemblyInfo.fs
+/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/obj/Debug/net8.0/QTreeBench.fsproj.CoreCompileInputs.cache
+/home/roman/Desktop/Code/Project/implementation-of-linear-algebra-primitives/src/bench/obj/Debug/net8.0/QTreeBench.sourcelink.json
