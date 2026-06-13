@@ -13,7 +13,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang-format-18 clang-tidy-18 run-clang-tidy-18
+          # clang-tools-18 включает clang-tidy-18 и run-clang-tidy-18
+          sudo apt-get install -y cmake clang-format-18 clang-tools-18
 
       - name: Check format
         run: |
