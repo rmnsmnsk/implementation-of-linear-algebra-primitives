@@ -1,8 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
-project(LinearAlgebraPrimitives)
+add_library(c_impl_lib STATIC COO.c)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+target_include_directories(c_impl_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(tests tests.c COO.c)
-target_link_libraries(tests m)
+add_executable(tests tests.c)
+target_link_libraries(tests PRIVATE c_impl_lib)
