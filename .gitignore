@@ -58,3 +58,11 @@ obj/
 BenchmarkDotNet.Artifacts/
 *.dll
 *.exe
+
+# Build artifacts
+**/build/
+**/bin/
+*.o
+*.a
+*.so
+

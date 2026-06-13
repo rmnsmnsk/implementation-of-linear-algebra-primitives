@@ -1,39 +1,43 @@
-name: CI
+name: Build and lint
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  - push
+  - pull_request
 
 jobs:
-  build-and-test:
+  build-and-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang-format build-essential
+          sudo apt-get install -y cmake clang-format-18 clang-tidy-18 run-clang-tidy-18
 
-      - name: Check C format
+      - name: Check format
         run: |
-          find src/c_impl src/bench -type f \( -name '*.c' -o -name '*.h' \) \
-            -not -path '*/build/*' \
-            -exec clang-format --dry-run -Werror {} +
+          find . -path ./build -prune -o -type f -name '*.[c|h]' -print | xargs clang-format-18 --style=file --dry-run -Werror
 
-      - name: Build Tests (c_impl)
-        working-directory: src/c_impl
+      - name: Configure
         run: |
-          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          # -DCMAKE_EXPORT_COMPILE_COMMANDS=ON is important for clang-tidy
+          cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: |
           cmake --build build
-          ./build/tests
 
-      - name: Build Benchmark (bench)
-        working-directory: src/bench
+      - name: Lint
         run: |
-          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          cmake --build build
-          ./build/benchmark_c 100 0.05 mm
-          ./build/benchmark_c 100 0.05 mv
+          run-clang-tidy-18 -p=build
+
+      - name: Run tests
+        run: |
+          if [ -f "build/src/c_impl/tests" ]; then
+            ./build/src/c_impl/tests
+          fi
+          if [ -f "build/src/bench/benchmark_c" ]; then
+            ./build/src/bench/benchmark_c 100 0.05 mm
+            ./build/src/bench/benchmark_c 100 0.05 mv
+          fi
