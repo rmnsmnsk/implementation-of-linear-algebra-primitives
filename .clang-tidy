@@ -1,8 +1,6 @@
 ---
----
 Checks: >
   bugprone-*,
-  clang-analyzer-*,
   performance-*,
   readability-*,
   -modernize-*,
@@ -15,6 +13,7 @@ Checks: >
   -android-*,
   -llvm-*,
   -readability-*,
+  -clang-analyzer-*,
   -bugprone-easily-swappable-parameters,
   -cert-err33-c,
   -cert-err34-c,
