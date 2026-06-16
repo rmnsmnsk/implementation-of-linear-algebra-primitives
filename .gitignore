@@ -53,4 +53,16 @@ dkms.conf
 
 # debug information files
 *.dwo
-build/
+build/bin/
+obj/
+BenchmarkDotNet.Artifacts/
+*.dll
+*.exe
+
+# Build artifacts
+**/build/
+**/bin/
+*.o
+*.a
+*.so
+

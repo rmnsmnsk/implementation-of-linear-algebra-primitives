@@ -1,57 +1,46 @@
-name: CI
+name: Build and lint
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  - push
+  - pull_request
 
 jobs:
-  format-check:
+  build-and-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
-
-      - name: Check C format (src/)
-        run: |
-          find src -type f \( -name '*.c' -o -name '*.h' \) \
-            -exec clang-format --dry-run -Werror {} +
-
-  build-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang-format-18 clang-tools-18
 
-      - name: Configure CMake
-        working-directory: src
-        run: cmake -B build
+      - name: Check format
+        run: |
+          find src -name '*.[c|h]' -print | xargs clang-format-18 --style=file --dry-run -Werror
+
+      - name: Configure
+        run: |
+          cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Build
-        working-directory: src
-        run: cmake --build build
+        run: |
+          cmake --build build
+
+      - name: Lint
+        run: |
+          find src -name "*.c" -not -path "*/SuiteSparse/*" | while read file; do
+            echo "Linting $file"
+            clang-tidy-18 -p=build "$file" --warnings-as-errors=*
+          done
 
       - name: Run tests
-        working-directory: src
-        run: ./build/tests
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy
-
-      - name: Configure CMake with compilation database
-        working-directory: src
-        run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-      - name: Run clang-tidy
-        working-directory: src
-        run: run-clang-tidy -p build '.*\.c$'
+        run: |
+          if [ -f "build/tests" ]; then
+            ./build/tests
+          else
+            echo "Tests executable not found"
+            exit 1
+          fi

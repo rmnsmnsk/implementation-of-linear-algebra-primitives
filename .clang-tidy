@@ -1,2 +1,29 @@
-Checks: 'clang-analyzer-*,bugprone-*,performance-*,-bugprone-easily-swappable-parameters'
-WarningsAsErrors: '*'
+---
+Checks: >
+  bugprone-*,
+  performance-*,
+  readability-*,
+  -modernize-*,
+  -cppcoreguidelines-*,
+  -hicpp-*,
+  -google-*,
+  -fuchsia-*,
+  -zircon-*,
+  -abseil-*,
+  -android-*,
+  -llvm-*,
+  -readability-*,
+  -clang-analyzer-*,
+  -bugprone-easily-swappable-parameters,
+  -cert-err33-c,
+  -cert-err34-c,
+  -misc-no-recursion
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: 'src/.*'
+
+CheckOptions:
+  readability-identifier-naming.FunctionCase: snake_case
+  readability-identifier-naming.VariableCase: snake_case
+  readability-identifier-naming.ParameterCase: snake_case

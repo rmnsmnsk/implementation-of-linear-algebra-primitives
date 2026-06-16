@@ -12,13 +12,14 @@
 ├── COO.c          # реализация операций
 ├── tests.c        # тесты
 └── CMakeLists.txt # сборка
+└── benchmark.c
 ```
 
 ## Формат COO
 
 Разреженная матрица хранится в виде трех массивов:
 - `rows_indices` — индексы строк
-- `coll_indices` — индексы столбцов  
+- `coll_indices` — индексы столбцов
 - `values` — значения ненулевых элементов
 
 ```c
@@ -26,7 +27,7 @@ typedef struct COO {
     int nnz;           // количество ненулевых элементов
     int rows;          // количество строк
     int columns;       // количество столбцов
-    int *rows_indices; 
+    int *rows_indices;
     int *coll_indices;
     float *values;
 } COO;

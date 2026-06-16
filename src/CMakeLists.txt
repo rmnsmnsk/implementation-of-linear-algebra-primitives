@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.10)
-project(LinearAlgebraPrimitives)
+project(SparseMatrixBenchmark C)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
 
-add_executable(tests tests.c COO.c)
-target_link_libraries(tests m)
+add_library(c_impl_lib STATIC COO.c matrix.c)
+target_include_directories(c_impl_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_subdirectory(../SuiteSparse/CSparse ${CMAKE_CURRENT_BINARY_DIR}/csparse)
+
+add_executable(tests tests.c)
+target_link_libraries(tests PRIVATE c_impl_lib)
+
+add_executable(benchmark benchmark.c)
+target_link_libraries(benchmark PRIVATE c_impl_lib csparse m)
+target_include_directories(benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../SuiteSparse/CSparse/Include)
