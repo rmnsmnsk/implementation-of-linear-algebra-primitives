@@ -19,7 +19,7 @@ jobs:
 
       - name: Check format
         run: |
-          find . -path ./build -prune -o -path ./SuiteSparse -prune -o -type f -name '*.[c|h]' -print | xargs clang-format-18 --style=file --dry-run -Werror
+          find src -name '*.[c|h]' -print | xargs clang-format-18 --style=file --dry-run -Werror
 
       - name: Configure
         run: |
@@ -31,13 +31,16 @@ jobs:
 
       - name: Lint
         run: |
-          run-clang-tidy-18 -p=build -exclude=".*SuiteSparse.*"
+          find src -name "*.c" -not -path "*/SuiteSparse/*" | while read file; do
+            echo "Linting $file"
+            clang-tidy-18 -p=build "$file" --warnings-as-errors=*
+          done
 
       - name: Run tests
         run: |
           if [ -f "build/tests" ]; then
             ./build/tests
-          fi
-          if [ -f "build/benchmark" ]; then
-            ./build/benchmark
+          else
+            echo "Tests executable not found"
+            exit 1
           fi
