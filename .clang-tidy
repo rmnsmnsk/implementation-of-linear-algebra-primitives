@@ -25,6 +25,8 @@ Checks: >
   -cert-err33-c,
   -cert-err34-c,
   -misc-no-recursion
+  -readability-isolate-declaration
+  -bugprone-narrowing-conversions
 
 WarningsAsErrors: ''
 
