@@ -55,9 +55,7 @@ COO* sort_matrix(COO* matrix)
             int id1 = indices[i];
             int id2 = indices[j];
 
-            if (matrix->rows_indices[id1] > matrix->rows_indices[id2] ||
-                (matrix->rows_indices[id1] == matrix->rows_indices[id2] &&
-                 matrix->coll_indices[id1] > matrix->coll_indices[id2])) {
+            if (matrix->rows_indices[id1] > matrix->rows_indices[id2] || (matrix->rows_indices[id1] == matrix->rows_indices[id2] && matrix->coll_indices[id1] > matrix->coll_indices[id2])) {
                 int temp = indices[i];
                 indices[i] = indices[j];
                 indices[j] = temp;
@@ -395,16 +393,20 @@ void coo_map(COO* mat, float (*func)(float))
 
 COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
 {
-    if (first == NULL || second == NULL) return NULL;
-    if (first->rows != second->rows || first->columns != second->columns) return NULL;
+    if (first == NULL || second == NULL)
+        return NULL;
+    if (first->rows != second->rows || first->columns != second->columns)
+        return NULL;
 
     first = sort_matrix(first);
     second = sort_matrix(second);
-    if (first == NULL || second == NULL) return NULL;
+    if (first == NULL || second == NULL)
+        return NULL;
 
     int max = first->nnz + second->nnz;
     COO* result = malloc(sizeof(COO));
-    if (result == NULL) return NULL;
+    if (result == NULL)
+        return NULL;
 
     int* result_row_indices = malloc(sizeof(int) * max);
     int* result_coll_indices = malloc(sizeof(int) * max);
@@ -422,8 +424,7 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
     int i = 0, j = 0;
 
     while (i < first->nnz && j < second->nnz) {
-        if (first->rows_indices[i] == second->rows_indices[j] &&
-            first->coll_indices[i] == second->coll_indices[j]) {
+        if (first->rows_indices[i] == second->rows_indices[j] && first->coll_indices[i] == second->coll_indices[j]) {
             float value = func(first->values[i], second->values[j]);
             if (fabsf(value) > 1e-6f) {
                 result_values[count] = value;
@@ -431,11 +432,9 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
                 result_coll_indices[count] = first->coll_indices[i];
                 count++;
             }
-            i++; j++;
-        }
-        else if (first->rows_indices[i] < second->rows_indices[j] ||
-                (first->rows_indices[i] == second->rows_indices[j] &&
-                 first->coll_indices[i] < second->coll_indices[j])) {
+            i++;
+            j++;
+        } else if (first->rows_indices[i] < second->rows_indices[j] || (first->rows_indices[i] == second->rows_indices[j] && first->coll_indices[i] < second->coll_indices[j])) {
             float value = func(first->values[i], 0.0f);
             if (fabsf(value) > 1e-6f) {
                 result_values[count] = value;
@@ -444,8 +443,7 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
                 count++;
             }
             i++;
-        }
-        else {
+        } else {
             float value = func(0.0f, second->values[j]);
             if (fabsf(value) > 1e-6f) {
                 result_values[count] = value;

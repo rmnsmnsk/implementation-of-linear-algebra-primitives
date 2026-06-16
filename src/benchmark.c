@@ -1,16 +1,18 @@
 #include "COO.h"
-#include "matrix.h"
 #include "cs.h"
+#include "matrix.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 cs* to_cs(COO* m)
 {
-    if (!m) return NULL;
+    if (!m)
+        return NULL;
 
     cs* T = cs_spalloc(m->nnz, m->rows, m->columns, 1, 1);
-    if (!T) return NULL;
+    if (!T)
+        return NULL;
 
     for (int i = 0; i < m->nnz; i++) {
         if (!cs_entry(T, m->rows_indices[i], m->coll_indices[i], (double)m->values[i])) {
@@ -26,18 +28,21 @@ cs* to_cs(COO* m)
 
 int get_cs_nnz(cs* A)
 {
-    if (!A) return 0;
-    if (A->nz >= 0) return (int)A->nz;
+    if (!A)
+        return 0;
+    if (A->nz >= 0)
+        return (int)A->nz;
     int nnz = 0;
     for (int i = 0; i < A->n; i++) {
-        nnz += A->p[i+1] - A->p[i];
+        nnz += A->p[i + 1] - A->p[i];
     }
     return nnz;
 }
 
 void run(const char* path, const char* name)
 {
-    if (!path || !name) return;
+    if (!path || !name)
+        return;
     printf("%s\n", name);
 
     COO* a = read_matrix_market(path);
