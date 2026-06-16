@@ -32,11 +32,11 @@ int get_cs_nnz(cs* A)
         return 0;
     if (A->nz >= 0)
         return (int)A->nz;
-    int nnz = 0;
+    long nnz = 0;
     for (int i = 0; i < A->n; i++) {
         nnz += A->p[i + 1] - A->p[i];
     }
-    return nnz;
+    return (int)nnz;
 }
 
 void run(const char* path, const char* name)
