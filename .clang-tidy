@@ -4,7 +4,6 @@ Checks: >
   clang-analyzer-*,
   performance-*,
   readability-*,
-  # Отключаем C++-специфичные и overly pedantic проверки
   -modernize-*,
   -cppcoreguidelines-*,
   -hicpp-*,

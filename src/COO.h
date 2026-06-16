@@ -1,3 +1,4 @@
+// COO.h
 #pragma once
 #include <stdbool.h>
 
@@ -9,6 +10,7 @@ typedef struct COO {
     int* coll_indices;
     float* values; // сами значения
 } COO;
+
 void free_matrix(COO* matrix);
 COO* create_matrix_copy(COO* original);
 COO* sort_matrix(COO* matrix);
