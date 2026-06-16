@@ -1,25 +1,29 @@
 
 #include "matrix.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 COO* read_matrix_market(const char* filename)
 {
-    if (!filename) return NULL;
+    if (!filename)
+        return NULL;
 
     FILE* file = fopen(filename, "r");
-    if (!file) return NULL;
+    if (!file)
+        return NULL;
 
     char line[2048];
     int rows = 0, cols = 0, nnz = 0;
     int header_found = 0;
 
     while (fgets(line, sizeof(line), file)) {
-        if (line[0] == '%') continue;
+        if (line[0] == '%')
+            continue;
 
-        if (strlen(line) < 2) continue;
+        if (strlen(line) < 2)
+            continue;
 
         if (!header_found) {
             if (sscanf(line, "%d %d %d", &rows, &cols, &nnz) == 3) {
@@ -59,9 +63,11 @@ COO* read_matrix_market(const char* filename)
 
     int idx = 0;
     while (fgets(line, sizeof(line), file) && idx < nnz) {
-        if (line[0] == '%') continue;
+        if (line[0] == '%')
+            continue;
 
-        if (strlen(line) < 2) continue;
+        if (strlen(line) < 2)
+            continue;
 
         int r, c;
         float v;
@@ -82,7 +88,8 @@ COO* read_matrix_market(const char* filename)
 
 void print_matrix_info(COO* m, const char* name)
 {
-    if (!m || !name) return;
+    if (!m || !name)
+        return;
     printf("Matrix: %s\n", name);
     printf("Size: %d x %d\n", m->rows, m->columns);
     printf("NNZ: %d\n", m->nnz);
