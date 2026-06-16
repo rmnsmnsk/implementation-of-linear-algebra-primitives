@@ -105,7 +105,7 @@ COO* sort_matrix(COO* matrix)
 
 bool is_line(COO* matrix)
 {
-    return matrix->rows == 1 || matrix->columns == 1;
+    return matrix->rows == 1 && matrix->columns > 1;
 }
 
 float* make_table_vector(COO* vector)
