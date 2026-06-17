@@ -1,4 +1,3 @@
-// COO.h
 #pragma once
 #include <stdbool.h>
 
