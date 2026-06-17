@@ -13,6 +13,8 @@
 ├── tests.c        # тесты
 └── CMakeLists.txt # сборка
 └── benchmark.c
+└── matrix.c
+└── matrix.h
 ```
 
 ## Формат COO
