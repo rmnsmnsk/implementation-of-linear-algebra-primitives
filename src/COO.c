@@ -1,4 +1,3 @@
-// COO.c
 #include "COO.h"
 #include <math.h>
 #include <stdbool.h>
