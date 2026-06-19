@@ -12,7 +12,7 @@ COO* create_random_vector(int size, float density)
     if (size <= 0)
         return NULL;
 
-    int nnz = (int)(size * density);
+    int nnz = (int)((float)size * density);
     if (nnz < 1)
         nnz = 1;
     if (nnz > size)
@@ -114,7 +114,7 @@ cs* to_cs(COO* m)
 
     for (int i = 0; i < m->nnz; i++) {
         int col = m->coll_indices[i];
-        int idx = pos[col]++;
+        int64_t idx = pos[col]++;
         A->i[idx] = m->rows_indices[i];
         A->x[idx] = (double)m->values[i];
     }
