@@ -3,12 +3,12 @@
 #include <stdbool.h>
 
 typedef struct COO {
-    int nnz;            // кол-во ненулевых элементов
-    int rows;           // кол-во строк
-    int columns;        // кол-во столбцов
-    int* rows_indices;  // индексы строк ненулевых элементов
-    int* coll_indices;  // индексы столбцов ненулевых элементов
-    float* values;      // сами значения
+    int nnz; // кол-во ненулевых элементов
+    int rows; // кол-во строк
+    int columns; // кол-во столбцов
+    int* rows_indices; // индексы строк ненулевых элементов
+    int* coll_indices; // индексы столбцов ненулевых элементов
+    float* values; // сами значения
 } COO;
 
 void free_matrix(COO* matrix);
