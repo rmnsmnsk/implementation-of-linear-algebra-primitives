@@ -206,9 +206,9 @@ void benchmark_matrix_vector(const char* path, const char* name)
         free_matrix(a);
         return;
     }
-
+    
     clock_t t1 = clock();
-    COO* res = multiplication_matrix_and_vector(a, v);
+    COO* res = multiplication_matrix_and_vector_coo(a, v);
     clock_t t2 = clock();
 
     if (res) {
