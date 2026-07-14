@@ -4,35 +4,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-COO* create_matrix_copy(COO* original)
+typedef struct {
+    int row;
+    int col;
+    float val;
+} COO_Element;
+
+static int compare_coo_elements(const void* a, const void* b)
 {
-    if (original == NULL)
-        return NULL;
-
-    COO* copy = malloc(sizeof(COO));
-    if (copy == NULL)
-        return NULL;
-
-    copy->nnz = original->nnz;
-    copy->rows = original->rows;
-    copy->columns = original->columns;
-
-    copy->rows_indices = malloc(sizeof(int) * original->nnz);
-    copy->coll_indices = malloc(sizeof(int) * original->nnz);
-    copy->values = malloc(sizeof(float) * original->nnz);
-
-    if (copy->rows_indices == NULL || copy->coll_indices == NULL || copy->values == NULL) {
-        free_matrix(copy);
-        return NULL;
+    const COO_Element* elem1 = (const COO_Element*)a;
+    const COO_Element* elem2 = (const COO_Element*)b;
+    if (elem1->row != elem2->row) {
+        return elem1->row - elem2->row;
     }
-
-    for (int i = 0; i < original->nnz; i++) {
-        copy->rows_indices[i] = original->rows_indices[i];
-        copy->coll_indices[i] = original->coll_indices[i];
-        copy->values[i] = original->values[i];
-    }
-
-    return copy;
+    return elem1->col - elem2->col;
 }
 
 COO* sort_matrix(COO* matrix)
@@ -42,69 +27,57 @@ COO* sort_matrix(COO* matrix)
     if (matrix->rows_indices == NULL || matrix->coll_indices == NULL || matrix->values == NULL)
         return NULL;
 
-    int* indices = malloc(sizeof(int) * matrix->nnz);
-    if (indices == NULL)
+    COO_Element* elements = malloc(sizeof(COO_Element) * matrix->nnz);
+    if (elements == NULL)
         return NULL;
-
-    for (int i = 0; i < matrix->nnz; i++)
-        indices[i] = i;
-
-    for (int i = 0; i < matrix->nnz - 1; i++) {
-        for (int j = i + 1; j < matrix->nnz; j++) {
-            int id1 = indices[i];
-            int id2 = indices[j];
-
-            if (matrix->rows_indices[id1] > matrix->rows_indices[id2] || (matrix->rows_indices[id1] == matrix->rows_indices[id2] && matrix->coll_indices[id1] > matrix->coll_indices[id2])) {
-                int temp = indices[i];
-                indices[i] = indices[j];
-                indices[j] = temp;
-            }
-        }
-    }
-
-    int* new_row = malloc(sizeof(int) * matrix->nnz);
-    if (new_row == NULL) {
-        free(indices);
-        return NULL;
-    }
-
-    int* new_col = malloc(sizeof(int) * matrix->nnz);
-    if (new_col == NULL) {
-        free(indices);
-        free(new_row);
-        return NULL;
-    }
-
-    float* new_values = malloc(sizeof(float) * matrix->nnz);
-    if (new_values == NULL) {
-        free(indices);
-        free(new_row);
-        free(new_col);
-        return NULL;
-    }
 
     for (int i = 0; i < matrix->nnz; i++) {
-        int new_idx = indices[i];
-        new_row[i] = matrix->rows_indices[new_idx];
-        new_col[i] = matrix->coll_indices[new_idx];
-        new_values[i] = matrix->values[new_idx];
+        elements[i].row = matrix->rows_indices[i];
+        elements[i].col = matrix->coll_indices[i];
+        elements[i].val = matrix->values[i];
     }
 
-    free(matrix->rows_indices);
-    free(matrix->coll_indices);
-    free(matrix->values);
-    free(indices);
+    qsort(elements, matrix->nnz, sizeof(COO_Element), compare_coo_elements);
 
-    matrix->rows_indices = new_row;
-    matrix->coll_indices = new_col;
-    matrix->values = new_values;
+    for (int i = 0; i < matrix->nnz; i++) {
+        matrix->rows_indices[i] = elements[i].row;
+        matrix->coll_indices[i] = elements[i].col;
+        matrix->values[i] = elements[i].val;
+    }
 
+    free(elements);
     return matrix;
+}
+
+COO* create_matrix_copy(COO* original)
+{
+    if (original == NULL)
+        return NULL;
+    COO* copy = malloc(sizeof(COO));
+    if (copy == NULL)
+        return NULL;
+    copy->nnz = original->nnz;
+    copy->rows = original->rows;
+    copy->columns = original->columns;
+    copy->rows_indices = malloc(sizeof(int) * original->nnz);
+    copy->coll_indices = malloc(sizeof(int) * original->nnz);
+    copy->values = malloc(sizeof(float) * original->nnz);
+
+    if (!copy->rows_indices || !copy->coll_indices || !copy->values) {
+        free_matrix(copy);
+        return NULL;
+    }
+    for (int i = 0; i < original->nnz; i++) {
+        copy->rows_indices[i] = original->rows_indices[i];
+        copy->coll_indices[i] = original->coll_indices[i];
+        copy->values[i] = original->values[i];
+    }
+    return copy;
 }
 
 bool is_line(COO* matrix)
 {
-    return matrix->rows == 1 && matrix->columns > 1;
+    return matrix && (matrix->rows == 1 && matrix->columns > 1);
 }
 
 float* make_table_vector(COO* vector)
@@ -112,37 +85,47 @@ float* make_table_vector(COO* vector)
     if (vector == NULL)
         return NULL;
 
-    int size = (vector->rows == 1) ? vector->columns : vector->rows;
-    float* vector_values = calloc(size, sizeof(float));
-    if (vector_values == NULL)
+    int size = vector->rows;
+    float* result = calloc(size, sizeof(float));
+    if (result == NULL)
         return NULL;
 
-    for (int i = 0; i < vector->nnz; ++i) {
-        int idx = (vector->rows == 1) ? vector->coll_indices[i] : vector->rows_indices[i];
-        if (idx >= 0 && idx < size)
-            vector_values[idx] = vector->values[i];
+    for (int i = 0; i < vector->nnz; i++) {
+        if (vector->rows_indices[i] < size) {
+            result[vector->rows_indices[i]] = vector->values[i];
+        }
     }
-    return vector_values;
+    return result;
 }
 
 COO* multiplication_two_matrix(COO* first, COO* second)
 {
-    if (first == NULL || second == NULL || (first->columns != second->rows)) {
+    if (!first || !second || first->columns != second->rows)
         return NULL;
-    }
-    if (first->rows_indices == NULL || first->coll_indices == NULL || first->values == NULL)
-        return NULL;
-    if (second->rows_indices == NULL || second->coll_indices == NULL || second->values == NULL)
+    if (!first->rows_indices || !second->rows_indices)
         return NULL;
 
     first = sort_matrix(first);
     second = sort_matrix(second);
-    if (first == NULL || second == NULL)
+    if (!first || !second)
         return NULL;
 
-    COO* result = (COO*)malloc(sizeof(COO));
-    if (result == NULL)
+    int* row_start = calloc(first->columns + 1, sizeof(int));
+    if (!row_start)
         return NULL;
+
+    for (int i = 0; i < second->nnz; i++) {
+        row_start[second->rows_indices[i] + 1]++;
+    }
+    for (int i = 0; i < first->columns; i++) {
+        row_start[i + 1] += row_start[i];
+    }
+
+    COO* result = malloc(sizeof(COO));
+    if (!result) {
+        free(row_start);
+        return NULL;
+    }
 
     result->rows = first->rows;
     result->columns = second->columns;
@@ -150,122 +133,153 @@ COO* multiplication_two_matrix(COO* first, COO* second)
     int max_nnz = first->nnz * second->nnz;
     if (max_nnz > first->rows * second->columns)
         max_nnz = first->rows * second->columns;
-
     if (max_nnz > 10000000)
         max_nnz = 10000000;
 
     int* temp_rows = malloc(sizeof(int) * max_nnz);
     int* temp_cols = malloc(sizeof(int) * max_nnz);
     float* temp_vals = malloc(sizeof(float) * max_nnz);
+    float* temp_row_buf = calloc(second->columns, sizeof(float));
 
-    if (temp_rows == NULL || temp_cols == NULL || temp_vals == NULL) {
+    if (!temp_rows || !temp_cols || !temp_vals || !temp_row_buf) {
+        free(result);
+        free(row_start);
         free(temp_rows);
         free(temp_cols);
         free(temp_vals);
-        free(result);
+        free(temp_row_buf);
         return NULL;
     }
 
-    int nnz = 0;
+    int res_nnz = 0;
+    int current_row = -1;
 
     for (int i = 0; i < first->nnz; i++) {
-        for (int j = 0; j < second->nnz; j++) {
-            if (first->coll_indices[i] == second->rows_indices[j]) {
-                int row = first->rows_indices[i];
-                int col = second->coll_indices[j];
-                float val = first->values[i] * second->values[j];
+        int r1 = first->rows_indices[i];
+        int c1 = first->coll_indices[i];
+        float v1 = first->values[i];
 
-                int found = -1;
-                for (int k = 0; k < nnz; k++) {
-                    if (temp_rows[k] == row && temp_cols[k] == col) {
-                        found = k;
-                        break;
+        if (r1 != current_row) {
+            if (current_row != -1) {
+                for (int c = 0; c < second->columns; c++) {
+                    if (fabsf(temp_row_buf[c]) > 1e-6f) {
+                        if (res_nnz < max_nnz) {
+                            temp_rows[res_nnz] = current_row;
+                            temp_cols[res_nnz] = c;
+                            temp_vals[res_nnz] = temp_row_buf[c];
+                            res_nnz++;
+                        }
+                        temp_row_buf[c] = 0.0f;
                     }
                 }
+            }
+            current_row = r1;
+        }
 
-                if (found != -1) {
-                    temp_vals[found] += val;
-                } else if (nnz < max_nnz) {
-                    temp_rows[nnz] = row;
-                    temp_cols[nnz] = col;
-                    temp_vals[nnz] = val;
-                    nnz++;
+        int start_j = row_start[c1];
+        int end_j = row_start[c1 + 1];
+        for (int j = start_j; j < end_j; j++) {
+            temp_row_buf[second->coll_indices[j]] += v1 * second->values[j];
+        }
+    }
+
+    if (current_row != -1) {
+        for (int c = 0; c < second->columns; c++) {
+            if (fabsf(temp_row_buf[c]) > 1e-6f) {
+                if (res_nnz < max_nnz) {
+                    temp_rows[res_nnz] = current_row;
+                    temp_cols[res_nnz] = c;
+                    temp_vals[res_nnz] = temp_row_buf[c];
+                    res_nnz++;
                 }
             }
         }
     }
 
-    result->nnz = nnz;
-    if (nnz == 0) {
+    result->nnz = res_nnz;
+    if (res_nnz == 0) {
         result->rows_indices = NULL;
         result->coll_indices = NULL;
         result->values = NULL;
     } else {
-        result->rows_indices = malloc(sizeof(int) * nnz);
-        result->coll_indices = malloc(sizeof(int) * nnz);
-        result->values = malloc(sizeof(float) * nnz);
-
-        if (result->rows_indices == NULL || result->coll_indices == NULL || result->values == NULL) {
+        result->rows_indices = malloc(sizeof(int) * res_nnz);
+        result->coll_indices = malloc(sizeof(int) * res_nnz);
+        result->values = malloc(sizeof(float) * res_nnz);
+        if (!result->rows_indices || !result->coll_indices || !result->values) {
             free(result->rows_indices);
             free(result->coll_indices);
             free(result->values);
             free(result);
+            free(row_start);
             free(temp_rows);
             free(temp_cols);
             free(temp_vals);
+            free(temp_row_buf);
             return NULL;
         }
-
-        for (int i = 0; i < nnz; i++) {
+        for (int i = 0; i < res_nnz; i++) {
             result->rows_indices[i] = temp_rows[i];
             result->coll_indices[i] = temp_cols[i];
             result->values[i] = temp_vals[i];
         }
     }
 
+    free(row_start);
     free(temp_rows);
     free(temp_cols);
     free(temp_vals);
-
+    free(temp_row_buf);
     return result;
 }
 
-COO* multiplication_matrix_and_vector(COO* first, COO* second)
+float* multiplication_matrix_and_vector(COO* matrix, const float* vector)
 {
-    if (first == NULL || second == NULL || is_line(second))
+    if (!matrix || !vector)
         return NULL;
 
-    float* vector_values = make_table_vector(second);
-    if (vector_values == NULL)
+    float* result = calloc(matrix->rows, sizeof(float));
+    if (!result)
         return NULL;
 
-    COO* result = (COO*)malloc(sizeof(COO));
-    if (result == NULL) {
-        free(vector_values);
-        return NULL;
-    }
-
-    result->rows = first->rows;
-    result->columns = 1;
-
-    float* temp_vals = calloc(first->rows, sizeof(float));
-    if (temp_vals == NULL) {
-        free(result);
-        free(vector_values);
-        return NULL;
-    }
-
-    for (int i = 0; i < first->nnz; ++i) {
-        int row = first->rows_indices[i];
-        int col = first->coll_indices[i];
-        if (row >= 0 && row < first->rows && col >= 0 && col < first->columns) {
-            temp_vals[row] += first->values[i] * vector_values[col];
+    for (int i = 0; i < matrix->nnz; ++i) {
+        int row = matrix->rows_indices[i];
+        int col = matrix->coll_indices[i];
+        if (row >= 0 && row < matrix->rows && col >= 0 && col < matrix->columns) {
+            result[row] += matrix->values[i] * vector[col];
         }
     }
+    return result;
+}
+
+COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
+{
+    if (!matrix || !vector)
+        return NULL;
+    if (vector->columns != 1)
+        return NULL;
+
+    float* dense_vector = make_table_vector(vector);
+    if (!dense_vector)
+        return NULL;
+
+    float* result_dense = multiplication_matrix_and_vector(matrix, dense_vector);
+    free(dense_vector);
+
+    if (!result_dense)
+        return NULL;
+
+    COO* result = malloc(sizeof(COO));
+    if (!result) {
+        free(result_dense);
+        return NULL;
+    }
+
+    result->rows = matrix->rows;
+    result->columns = 1;
 
     int nnz = 0;
-    for (int i = 0; i < first->rows; ++i) {
-        if (fabsf(temp_vals[i]) > 1e-6f)
+    for (int i = 0; i < matrix->rows; i++) {
+        if (fabsf(result_dense[i]) > 1e-6f)
             nnz++;
     }
 
@@ -278,30 +292,27 @@ COO* multiplication_matrix_and_vector(COO* first, COO* second)
         result->rows_indices = malloc(sizeof(int) * nnz);
         result->coll_indices = malloc(sizeof(int) * nnz);
         result->values = malloc(sizeof(float) * nnz);
-
-        if (result->rows_indices == NULL || result->coll_indices == NULL || result->values == NULL) {
+        if (!result->rows_indices || !result->coll_indices || !result->values) {
             free(result->rows_indices);
             free(result->coll_indices);
             free(result->values);
             free(result);
-            free(temp_vals);
-            free(vector_values);
+            free(result_dense);
             return NULL;
         }
 
         int idx = 0;
-        for (int i = 0; i < first->rows; ++i) {
-            if (fabsf(temp_vals[i]) > 1e-6f) {
+        for (int i = 0; i < matrix->rows; i++) {
+            if (fabsf(result_dense[i]) > 1e-6f) {
                 result->rows_indices[idx] = i;
                 result->coll_indices[idx] = 0;
-                result->values[idx] = temp_vals[i];
+                result->values[idx] = result_dense[i];
                 idx++;
             }
         }
     }
 
-    free(temp_vals);
-    free(vector_values);
+    free(result_dense);
     return result;
 }
 
@@ -310,12 +321,18 @@ COO* multiplication_vector_and_matrix(COO* first, COO* second)
     if (first == NULL || second == NULL || !is_line(first))
         return NULL;
 
-    float* vector_values = make_table_vector(first);
-    if (vector_values == NULL)
+    float* vector_values = calloc(first->columns, sizeof(float));
+    if (!vector_values)
         return NULL;
 
-    COO* result = (COO*)malloc(sizeof(COO));
-    if (result == NULL) {
+    for (int i = 0; i < first->nnz; ++i) {
+        if (first->coll_indices[i] < first->columns) {
+            vector_values[first->coll_indices[i]] = first->values[i];
+        }
+    }
+
+    COO* result = malloc(sizeof(COO));
+    if (!result) {
         free(vector_values);
         return NULL;
     }
@@ -324,16 +341,16 @@ COO* multiplication_vector_and_matrix(COO* first, COO* second)
     result->columns = second->columns;
 
     float* temp_vals = calloc(second->columns, sizeof(float));
-    if (temp_vals == NULL) {
-        free(result);
+    if (!temp_vals) {
         free(vector_values);
+        free(result);
         return NULL;
     }
 
     for (int i = 0; i < second->nnz; ++i) {
         int row = second->rows_indices[i];
         int col = second->coll_indices[i];
-        if (row >= 0 && row < second->rows && col >= 0 && col < second->columns) {
+        if (row < first->columns && col < second->columns) {
             temp_vals[col] += second->values[i] * vector_values[row];
         }
     }
@@ -345,22 +362,18 @@ COO* multiplication_vector_and_matrix(COO* first, COO* second)
     }
 
     result->nnz = nnz;
-    if (nnz == 0) {
-        result->rows_indices = NULL;
-        result->coll_indices = NULL;
-        result->values = NULL;
-    } else {
+
+    if (nnz > 0) {
         result->rows_indices = malloc(sizeof(int) * nnz);
         result->coll_indices = malloc(sizeof(int) * nnz);
         result->values = malloc(sizeof(float) * nnz);
-
-        if (result->rows_indices == NULL || result->coll_indices == NULL || result->values == NULL) {
+        if (!result->rows_indices || !result->coll_indices || !result->values) {
             free(result->rows_indices);
             free(result->coll_indices);
             free(result->values);
             free(result);
-            free(temp_vals);
             free(vector_values);
+            free(temp_vals);
             return NULL;
         }
 
@@ -373,21 +386,23 @@ COO* multiplication_vector_and_matrix(COO* first, COO* second)
                 idx++;
             }
         }
+    } else {
+        result->rows_indices = NULL;
+        result->coll_indices = NULL;
+        result->values = NULL;
     }
 
-    free(temp_vals);
     free(vector_values);
+    free(temp_vals);
     return result;
 }
 
 void coo_map(COO* mat, float (*func)(float))
 {
-    if (mat == NULL || func == NULL || mat->nnz == 0) {
+    if (!mat || !func || mat->nnz == 0)
         return;
-    }
-    for (int i = 0; i < mat->nnz; ++i) {
+    for (int i = 0; i < mat->nnz; ++i)
         mat->values[i] = func(mat->values[i]);
-    }
 }
 
 COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
@@ -404,14 +419,14 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
 
     int max = first->nnz + second->nnz;
     COO* result = malloc(sizeof(COO));
-    if (result == NULL)
+    if (!result)
         return NULL;
 
     int* result_row_indices = malloc(sizeof(int) * max);
     int* result_coll_indices = malloc(sizeof(int) * max);
     float* result_values = malloc(sizeof(float) * max);
 
-    if (result_row_indices == NULL || result_coll_indices == NULL || result_values == NULL) {
+    if (!result_row_indices || !result_coll_indices || !result_values) {
         free(result_row_indices);
         free(result_coll_indices);
         free(result_values);
@@ -419,9 +434,7 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
         return NULL;
     }
 
-    int count = 0;
-    int i = 0, j = 0;
-
+    int count = 0, i = 0, j = 0;
     while (i < first->nnz && j < second->nnz) {
         if (first->rows_indices[i] == second->rows_indices[j] && first->coll_indices[i] == second->coll_indices[j]) {
             float value = func(first->values[i], second->values[j]);
@@ -491,8 +504,7 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
         result->rows_indices = realloc(result_row_indices, count * sizeof(int));
         result->coll_indices = realloc(result_coll_indices, count * sizeof(int));
         result->values = realloc(result_values, count * sizeof(float));
-
-        if (result->rows_indices == NULL || result->coll_indices == NULL || result->values == NULL) {
+        if (!result->rows_indices || !result->coll_indices || !result->values) {
             free(result->rows_indices);
             free(result->coll_indices);
             free(result->values);
@@ -500,7 +512,6 @@ COO* coo_map2(COO* first, COO* second, float (*func)(float, float))
             return NULL;
         }
     }
-
     return result;
 }
 
