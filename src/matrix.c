@@ -1,5 +1,6 @@
 #include "matrix.h"
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,16 @@ COO* read_matrix_market(const char* filename)
     char line[2048];
     int rows = 0, cols = 0, nnz = 0;
     int header_found = 0;
+    int symmetric = 0;
+
+    if (fgets(line, sizeof(line), file)) {
+        char banner[64], object[64], format[64], field[64], symmetry[64];
+        if (sscanf(line, "%63s %63s %63s %63s %63s", banner, object, format, field, symmetry) == 5 && strcmp(banner, "%%MatrixMarket") == 0) {
+            symmetric = strcmp(symmetry, "symmetric") == 0;
+        } else {
+            rewind(file);
+        }
+    }
 
     while (fgets(line, sizeof(line), file)) {
         if (line[0] == '%')
@@ -45,11 +56,18 @@ COO* read_matrix_market(const char* filename)
 
     m->rows = rows;
     m->columns = cols;
-    m->nnz = nnz;
+    if (symmetric && nnz > INT_MAX / 2) {
+        free(m);
+        fclose(file);
+        return NULL;
+    }
 
-    m->rows_indices = malloc(sizeof(int) * nnz);
-    m->coll_indices = malloc(sizeof(int) * nnz);
-    m->values = malloc(sizeof(float) * nnz);
+    int capacity = symmetric ? nnz * 2 : nnz;
+    m->nnz = 0;
+
+    m->rows_indices = malloc(sizeof(int) * capacity);
+    m->coll_indices = malloc(sizeof(int) * capacity);
+    m->values = malloc(sizeof(float) * capacity);
 
     if (!m->rows_indices || !m->coll_indices || !m->values) {
         free(m->rows_indices);
@@ -61,7 +79,8 @@ COO* read_matrix_market(const char* filename)
     }
 
     int idx = 0;
-    while (fgets(line, sizeof(line), file) && idx < nnz) {
+    int stored_entries = 0;
+    while (fgets(line, sizeof(line), file) && stored_entries < nnz) {
         if (line[0] == '%')
             continue;
 
@@ -73,10 +92,30 @@ COO* read_matrix_market(const char* filename)
         int parsed = sscanf(line, "%d %d %f", &r, &c, &v);
 
         if (parsed >= 2) {
-            m->rows_indices[idx] = r - 1;
-            m->coll_indices[idx] = c - 1;
-            m->values[idx] = (parsed == 3) ? v : 1.0f;
+            int row = r - 1;
+            int column = c - 1;
+            float value = (parsed == 3) ? v : 1.0f;
+
+            if (row < 0 || row >= rows || column < 0 || column >= cols) {
+                free(m->rows_indices);
+                free(m->coll_indices);
+                free(m->values);
+                free(m);
+                fclose(file);
+                return NULL;
+            }
+
+            m->rows_indices[idx] = row;
+            m->coll_indices[idx] = column;
+            m->values[idx] = value;
             idx++;
+            if (symmetric && row != column) {
+                m->rows_indices[idx] = column;
+                m->coll_indices[idx] = row;
+                m->values[idx] = value;
+                idx++;
+            }
+            stored_entries++;
         }
     }
 

@@ -22,3 +22,22 @@ COO* multiplication_two_matrix(COO* first, COO* second);
 COO* multiplication_vector_and_matrix(COO* first, COO* second);
 void coo_map(COO* mat, float (*func)(float));
 COO* coo_map2(COO* first, COO* second, float (*func)(float, float));
+
+#ifdef COO_PROFILE
+typedef struct {
+    unsigned long calls;
+    unsigned long long lookup_calls;
+    unsigned long long lookup_comparisons;
+    double total_ms;
+    double sort_ms;
+    double workspace_ms;
+    double index_ms;
+    double accumulation_ms;
+    double buffer_scan_ms;
+    double result_ms;
+    double cleanup_ms;
+} COO_Profile;
+
+void coo_profile_reset(void);
+COO_Profile coo_profile_get(void);
+#endif

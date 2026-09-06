@@ -1,18 +1,21 @@
 #include "COO.h"
+#include "matrix.h"
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-void test_sort_matrix();
-void test_is_line();
-void test_make_table_vector();
-void test_multiplication_two_matrix();
-void test_multiplication_matrix_and_vector();
-void test_multiplication_vector_and_matrix();
-void test_coo_map();
-void test_coo_map2();
+void test_sort_matrix(void);
+void test_is_line(void);
+void test_make_table_vector(void);
+void test_multiplication_two_matrix(void);
+void test_multiplication_matrix_and_vector(void);
+void test_multiplication_matrix_and_sparse_vector(void);
+void test_read_symmetric_matrix_market(void);
+void test_multiplication_vector_and_matrix(void);
+void test_coo_map(void);
+void test_coo_map2(void);
 bool matrices_equal(COO* m1, COO* m2);
 COO* create_matrix(int nnz, int rows, int cols, int* row_indices, int* col_indices, float* values);
 
@@ -56,7 +59,7 @@ bool matrices_equal(COO* m1, COO* m2)
     return true;
 }
 
-void test_sort_matrix()
+void test_sort_matrix(void)
 {
     int row_indices[] = { 2, 0, 1, 0 };
     int col_indices[] = { 1, 2, 0, 0 };
@@ -73,7 +76,7 @@ void test_sort_matrix()
     free_matrix(matrix);
 }
 
-void test_is_line()
+void test_is_line(void)
 {
     int row_indices[] = { 0, 0, 0 };
     int col_indices[] = { 0, 1, 2 };
@@ -89,7 +92,7 @@ void test_is_line()
     free_matrix(matrix);
 }
 
-void test_make_table_vector()
+void test_make_table_vector(void)
 {
     int row_indices[] = { 0, 2, 1 };
     int col_indices[] = { 0, 0, 0 };
@@ -104,7 +107,7 @@ void test_make_table_vector()
     free_matrix(vector);
 }
 
-void test_multiplication_two_matrix()
+void test_multiplication_two_matrix(void)
 {
     int row_a[] = { 0, 0, 1, 1 };
     int col_a[] = { 0, 2, 1, 2 };
@@ -140,7 +143,7 @@ void test_multiplication_two_matrix()
     free_matrix(result);
 }
 
-void test_multiplication_matrix_and_vector()
+void test_multiplication_matrix_and_vector(void)
 {
     int row_a[] = { 0, 0, 1, 1 };
     int col_a[] = { 0, 1, 0, 1 };
@@ -164,7 +167,56 @@ void test_multiplication_matrix_and_vector()
     free_matrix(result);
 }
 
-void test_multiplication_vector_and_matrix()
+void test_multiplication_matrix_and_sparse_vector(void)
+{
+    int row_a[] = { 1, 0 };
+    int col_a[] = { 999999999, 5 };
+    float val_a[] = { 3.0f, 2.0f };
+    COO* A = create_matrix(2, 2, 1000000000, row_a, col_a, val_a);
+
+    int row_v[] = { 999999999, 5 };
+    int col_v[] = { 0, 0 };
+    float val_v[] = { 4.0f, 7.0f };
+    COO* V = create_matrix(2, 1000000000, 1, row_v, col_v, val_v);
+
+    COO* result = multiplication_matrix_and_vector_coo(A, V);
+    assert(result != NULL);
+    assert(result->rows == 2);
+    assert(result->columns == 1);
+    assert(result->nnz == 2);
+    assert(result->rows_indices[0] == 0 && fabsf(result->values[0] - 14.0f) < 1e-5f);
+    assert(result->rows_indices[1] == 1 && fabsf(result->values[1] - 12.0f) < 1e-5f);
+
+    V->rows--;
+    assert(multiplication_matrix_and_vector_coo(A, V) == NULL);
+
+    free_matrix(A);
+    free_matrix(V);
+    free_matrix(result);
+}
+
+void test_read_symmetric_matrix_market(void)
+{
+    COO* matrix = read_matrix_market("../matrices/dolphins.mtx");
+    assert(matrix != NULL);
+    assert(matrix->rows == 62);
+    assert(matrix->columns == 62);
+    assert(matrix->nnz == 318);
+
+    int row = matrix->rows_indices[0];
+    int column = matrix->coll_indices[0];
+    int mirrored_entry_found = 0;
+    for (int i = 0; i < matrix->nnz; i++) {
+        if (matrix->rows_indices[i] == column && matrix->coll_indices[i] == row) {
+            mirrored_entry_found = 1;
+            break;
+        }
+    }
+    assert(mirrored_entry_found);
+    free_matrix(matrix);
+}
+
+void test_multiplication_vector_and_matrix(void)
 {
     int row_v[] = { 0, 0 };
     int col_v[] = { 0, 1 };
@@ -188,7 +240,7 @@ void test_multiplication_vector_and_matrix()
 }
 
 float square(float x) { return x * x; }
-void test_coo_map()
+void test_coo_map(void)
 {
     int row_indices[] = { 0, 1, 2 };
     int col_indices[] = { 0, 1, 2 };
@@ -202,7 +254,7 @@ void test_coo_map()
 }
 
 float add(float a, float b) { return a + b; }
-void test_coo_map2()
+void test_coo_map2(void)
 {
     int row1[] = { 0, 0, 1, 2 };
     int col1[] = { 0, 1, 1, 2 };
@@ -228,13 +280,15 @@ void test_coo_map2()
     free_matrix(result);
 }
 
-int main()
+int main(void)
 {
     test_sort_matrix();
     test_is_line();
     test_make_table_vector();
     test_multiplication_two_matrix();
     test_multiplication_matrix_and_vector();
+    test_multiplication_matrix_and_sparse_vector();
+    test_read_symmetric_matrix_market();
     test_multiplication_vector_and_matrix();
     test_coo_map();
     test_coo_map2();
