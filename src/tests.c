@@ -197,7 +197,9 @@ void test_multiplication_matrix_and_sparse_vector(void)
 
 void test_read_symmetric_matrix_market(void)
 {
-    COO* matrix = read_matrix_market("../matrices/dolphins.mtx");
+    COO* matrix = read_matrix_market("matrices/dolphins.mtx");
+    if (matrix == NULL)
+        matrix = read_matrix_market("../matrices/dolphins.mtx");
     assert(matrix != NULL);
     assert(matrix->rows == 62);
     assert(matrix->columns == 62);

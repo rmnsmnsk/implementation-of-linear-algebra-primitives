@@ -24,7 +24,10 @@ COO* read_matrix_market(const char* filename)
         if (sscanf(line, "%63s %63s %63s %63s %63s", banner, object, format, field, symmetry) == 5 && strcmp(banner, "%%MatrixMarket") == 0) {
             symmetric = strcmp(symmetry, "symmetric") == 0;
         } else {
-            rewind(file);
+            if (fseek(file, 0, SEEK_SET) != 0) {
+                fclose(file);
+                return NULL;
+            }
         }
     }
 

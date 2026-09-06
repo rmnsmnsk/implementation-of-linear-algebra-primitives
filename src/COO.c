@@ -28,7 +28,7 @@ COO_Profile coo_profile_get(void)
 }
 
 #define PROFILE_BEGIN(name) double name = profile_time_ms()
-#define PROFILE_ADD(field, name) active_profile.field += profile_time_ms() - name
+#define PROFILE_ADD(field, name) (active_profile.field += (profile_time_ms() - (name)))
 #define PROFILE_INCREMENT(field) active_profile.field++
 #else
 #define PROFILE_BEGIN(name)
