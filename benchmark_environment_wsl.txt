@@ -1,0 +1,15 @@
+Measurement date: 2026-09-06
+Environment: WSL 2, Ubuntu 26.04
+Kernel: 6.18.33.2-microsoft-standard-WSL2
+Architecture: x86_64
+CPU: 13th Gen Intel(R) Core(TM) i5-13420H
+Logical processors available to WSL: 12
+Host RAM: 16 GB
+Memory available to WSL (MemTotal): 7989908 kB
+Compiler: GCC 15.2.0
+Optimization: -O3
+Timer: clock_gettime(CLOCK_MONOTONIC)
+
+Comparative benchmark output: benchmark_results_wsl.txt
+Profiling output: profiling_raw_wsl.txt
+Processed profiling data: profiling_results.csv
