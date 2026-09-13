@@ -1,11 +1,11 @@
-Measurement date: 2026-09-06
-Environment: WSL 2, Ubuntu 26.04
+Measurement date: 2026-09-12
+Operating system: Ubuntu 26.04 LTS
 Kernel: 6.18.33.2-microsoft-standard-WSL2
 Architecture: x86_64
 CPU: 13th Gen Intel(R) Core(TM) i5-13420H
-Logical processors available to WSL: 12
+Logical processors: 12
+Memory available to Ubuntu (MemTotal): 7989896 kB
 Host RAM: 16 GB
-Memory available to WSL (MemTotal): 7989908 kB
 Compiler: GCC 15.2.0
 Optimization: -O3
 Timer: clock_gettime(CLOCK_MONOTONIC)

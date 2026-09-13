@@ -1,0 +1,6 @@
+operation,matrix,before_median_us,after_median_us,reduction_percent
+matrix,add20,2882.296,1535.335,46.73
+matrix,ca-GrQc,13094.578,2749.474,79.00
+matrix,ca-HepTh,43480.173,6724.213,84.53
+vector,ca-GrQc,1175.114,254.539,78.34
+vector,ca-HepTh,2499.207,747.919,70.07

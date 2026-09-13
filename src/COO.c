@@ -1,6 +1,7 @@
 #include "COO.h"
 #include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -150,6 +151,8 @@ typedef struct {
     int* columns;
     float* values;
     float* row_buffer;
+    uint64_t* touched_bits;
+    size_t touched_word_count;
     size_t capacity;
     int nnz;
 } MatrixMultiplyWorkspace;
@@ -169,8 +172,10 @@ static bool initialize_multiply_workspace(const COO* first, const COO* second, M
     workspace->columns = malloc(sizeof(int) * workspace->capacity);
     workspace->values = malloc(sizeof(float) * workspace->capacity);
     workspace->row_buffer = calloc((size_t)second->columns, sizeof(float));
+    workspace->touched_word_count = ((size_t)second->columns + 63) / 64;
+    workspace->touched_bits = calloc(workspace->touched_word_count, sizeof(uint64_t));
 
-    return workspace->row_start && workspace->rows && workspace->columns && workspace->values && workspace->row_buffer;
+    return workspace->row_start && workspace->rows && workspace->columns && workspace->values && workspace->row_buffer && workspace->touched_bits;
 }
 
 static void free_multiply_workspace(MatrixMultiplyWorkspace* workspace)
@@ -180,6 +185,7 @@ static void free_multiply_workspace(MatrixMultiplyWorkspace* workspace)
     free(workspace->columns);
     free(workspace->values);
     free(workspace->row_buffer);
+    free(workspace->touched_bits);
 }
 
 static bool build_row_index(const COO* second, int row_count, int* row_start)
@@ -195,36 +201,46 @@ static bool build_row_index(const COO* second, int row_count, int* row_start)
     return true;
 }
 
-static bool accumulate_product_row(const COO* first, const COO* second, const int* row_start, int begin, int end, float* row_buffer)
+static bool accumulate_product_row(const COO* first, const COO* second, MatrixMultiplyWorkspace* workspace, int begin, int end)
 {
     for (int i = begin; i < end; i++) {
         int column = first->coll_indices[i];
         if (column < 0 || column >= first->columns)
             return false;
         float value = first->values[i];
-        for (int j = row_start[column]; j < row_start[column + 1]; j++) {
+        for (int j = workspace->row_start[column]; j < workspace->row_start[column + 1]; j++) {
             int result_column = second->coll_indices[j];
             if (result_column < 0 || result_column >= second->columns)
                 return false;
-            row_buffer[result_column] += value * second->values[j];
+            size_t word = (size_t)result_column / 64;
+            unsigned int bit = (unsigned int)result_column % 64;
+            workspace->touched_bits[word] |= UINT64_C(1) << bit;
+            workspace->row_buffer[result_column] += value * second->values[j];
         }
     }
     return true;
 }
 
-static bool flush_product_row(MatrixMultiplyWorkspace* workspace, int row, int column_count)
+static bool flush_product_row(MatrixMultiplyWorkspace* workspace, int row)
 {
-    for (int column = 0; column < column_count; column++) {
-        float value = workspace->row_buffer[column];
-        workspace->row_buffer[column] = 0.0f;
-        if (fabsf(value) <= 1e-6f)
-            continue;
-        if ((size_t)workspace->nnz >= workspace->capacity)
-            return false;
-        workspace->rows[workspace->nnz] = row;
-        workspace->columns[workspace->nnz] = column;
-        workspace->values[workspace->nnz] = value;
-        workspace->nnz++;
+    for (size_t word = 0; word < workspace->touched_word_count; word++) {
+        uint64_t bits = workspace->touched_bits[word];
+        workspace->touched_bits[word] = 0;
+        while (bits != 0) {
+            unsigned int bit = (unsigned int)__builtin_ctzll(bits);
+            int column = (int)(word * 64 + bit);
+            float value = workspace->row_buffer[column];
+            workspace->row_buffer[column] = 0.0f;
+            bits &= bits - 1;
+            if (fabsf(value) <= 1e-6f)
+                continue;
+            if ((size_t)workspace->nnz >= workspace->capacity)
+                return false;
+            workspace->rows[workspace->nnz] = row;
+            workspace->columns[workspace->nnz] = column;
+            workspace->values[workspace->nnz] = value;
+            workspace->nnz++;
+        }
     }
     return true;
 }
@@ -304,11 +320,11 @@ COO* multiplication_two_matrix(COO* first, COO* second)
             end++;
 
         PROFILE_BEGIN(accumulation_started);
-        bool accumulated = accumulate_product_row(first, second, workspace.row_start, begin, end, workspace.row_buffer);
+        bool accumulated = accumulate_product_row(first, second, &workspace, begin, end);
         PROFILE_ADD(accumulation_ms, accumulation_started);
 
         PROFILE_BEGIN(buffer_scan_started);
-        bool flushed = flush_product_row(&workspace, row, second->columns);
+        bool flushed = flush_product_row(&workspace, row);
         PROFILE_ADD(buffer_scan_ms, buffer_scan_started);
 
         if (!accumulated || !flushed) {
@@ -348,27 +364,76 @@ float* multiplication_matrix_and_vector(COO* matrix, const float* vector)
     return result;
 }
 
-static float find_sparse_vector_value(const COO* vector, int row)
+typedef struct {
+    int* keys;
+    float* values;
+    unsigned char* occupied;
+    size_t capacity;
+} SparseVectorIndex;
+
+static void free_sparse_vector_index(SparseVectorIndex* index)
 {
-    PROFILE_INCREMENT(lookup_calls);
-    int left = 0;
-    int right = vector->nnz;
-    while (left < right) {
-        PROFILE_INCREMENT(lookup_comparisons);
-        int middle = left + (right - left) / 2;
-        if (vector->rows_indices[middle] < row)
-            left = middle + 1;
-        else
-            right = middle;
+    free(index->keys);
+    free(index->values);
+    free(index->occupied);
+}
+
+static size_t sparse_vector_hash(int key, size_t capacity)
+{
+    uint32_t value = (uint32_t)key;
+    value ^= value >> 16;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return (size_t)value & (capacity - 1);
+}
+
+static bool initialize_sparse_vector_index(const COO* vector, SparseVectorIndex* index)
+{
+    if ((size_t)vector->nnz > SIZE_MAX / 2)
+        return false;
+
+    size_t required_capacity = (size_t)vector->nnz * 2;
+    index->capacity = 8;
+    while (index->capacity < required_capacity) {
+        if (index->capacity > SIZE_MAX / 2)
+            return false;
+        index->capacity *= 2;
     }
 
-    float value = 0.0f;
-    while (left < vector->nnz && vector->rows_indices[left] == row) {
-        PROFILE_INCREMENT(lookup_comparisons);
-        value += vector->values[left];
-        left++;
+    index->keys = malloc(sizeof(int) * index->capacity);
+    index->values = calloc(index->capacity, sizeof(float));
+    index->occupied = calloc(index->capacity, sizeof(unsigned char));
+    if (!index->keys || !index->values || !index->occupied)
+        return false;
+
+    for (int i = 0; i < vector->nnz; i++) {
+        int key = vector->rows_indices[i];
+        size_t position = sparse_vector_hash(key, index->capacity);
+        while (index->occupied[position] && index->keys[position] != key)
+            position = (position + 1) & (index->capacity - 1);
+
+        if (!index->occupied[position]) {
+            index->occupied[position] = 1;
+            index->keys[position] = key;
+        }
+        index->values[position] += vector->values[i];
     }
-    return value;
+    return true;
+}
+
+static float find_sparse_vector_value(const SparseVectorIndex* index, int row)
+{
+    PROFILE_INCREMENT(lookup_calls);
+    size_t position = sparse_vector_hash(row, index->capacity);
+    while (index->occupied[position]) {
+        PROFILE_INCREMENT(lookup_comparisons);
+        if (index->keys[position] == row)
+            return index->values[position];
+        position = (position + 1) & (index->capacity - 1);
+    }
+    return 0.0f;
 }
 
 COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
@@ -415,7 +480,7 @@ COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
     PROFILE_ADD(workspace_ms, workspace_started);
 
     PROFILE_BEGIN(sort_started);
-    if (!sort_matrix(matrix) || !sort_matrix(vector)) {
+    if (!sort_matrix(matrix)) {
         free(result);
         return NULL;
     }
@@ -431,6 +496,15 @@ COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
         return NULL;
     }
     PROFILE_ADD(result_ms, result_started);
+
+    SparseVectorIndex vector_index = { 0 };
+    PROFILE_BEGIN(index_started);
+    if (!initialize_sparse_vector_index(vector, &vector_index)) {
+        free_sparse_vector_index(&vector_index);
+        free_matrix(result);
+        return NULL;
+    }
+    PROFILE_ADD(index_ms, index_started);
 
     int current_row = matrix->rows_indices[0];
     float row_sum = 0.0f;
@@ -451,7 +525,7 @@ COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
             row_sum = 0.0f;
         }
 
-        row_sum += matrix->values[i] * find_sparse_vector_value(vector, column);
+        row_sum += matrix->values[i] * find_sparse_vector_value(&vector_index, column);
     }
 
     if (fabsf(row_sum) > 1e-6f) {
@@ -463,6 +537,7 @@ COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector)
     PROFILE_ADD(accumulation_ms, accumulation_started);
 
     PROFILE_BEGIN(cleanup_started);
+    free_sparse_vector_index(&vector_index);
     if (result->nnz == 0) {
         free(result->rows_indices);
         free(result->coll_indices);

@@ -153,7 +153,7 @@ if os.path.exists(profile_file):
     matrix_profile = [row for row in profile_rows if row['operation'] == 'matrix']
     vector_profile = [row for row in profile_rows if row['operation'] == 'vector']
     profile_fig, profile_axes = plt.subplots(1, 2, figsize=(16, 7))
-    profile_fig.suptitle('COO profiling: share of total execution time', fontsize=15, y=0.98)
+    profile_fig.suptitle('COO profiling after optimization: share of total execution time', fontsize=15, y=0.98)
 
     def plot_profile(ax, rows, title, accumulation_label, include_buffer):
         names = [row['name'] for row in rows]
@@ -170,7 +170,7 @@ if os.path.exists(profile_file):
         bottom = [sort_share[i] + accumulation_share[i] for i in x]
         if include_buffer:
             ax.bar(x, buffer_share, bottom=bottom,
-                   label='Dense buffer scan', color='#e74c3c')
+                   label='Touched-column bitmap', color='#e74c3c')
             bottom = [bottom[i] + buffer_share[i] for i in x]
         ax.bar(x, other_share, bottom=bottom, label='Other phases', color='#95a5a6')
         ax.set_xticks(x)
@@ -186,7 +186,7 @@ if os.path.exists(profile_file):
         'Product accumulation', True)
     plot_profile(
         profile_axes[1], vector_profile, 'Matrix-Vector Multiplication',
-        'Binary search and accumulation', False)
+        'Hash lookup and accumulation', False)
     profile_fig.subplots_adjust(wspace=0.25, top=0.88, bottom=0.17)
     profile_fig.savefig('profiling_graph.png', dpi=300, bbox_inches='tight')
 

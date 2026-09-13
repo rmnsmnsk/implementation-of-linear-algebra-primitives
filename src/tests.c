@@ -141,6 +141,25 @@ void test_multiplication_two_matrix(void)
     free_matrix(A);
     free_matrix(B);
     free_matrix(result);
+
+    int cancellation_row_a[] = { 0, 0 };
+    int cancellation_col_a[] = { 0, 1 };
+    float cancellation_val_a[] = { 1.0f, 1.0f };
+    COO* cancellation_a = create_matrix(2, 1, 2, cancellation_row_a, cancellation_col_a, cancellation_val_a);
+    int cancellation_row_b[] = { 1, 0, 1, 0 };
+    int cancellation_col_b[] = { 2, 2, 1, 0 };
+    float cancellation_val_b[] = { -1.0f, 1.0f, 3.0f, 2.0f };
+    COO* cancellation_b = create_matrix(4, 2, 3, cancellation_row_b, cancellation_col_b, cancellation_val_b);
+
+    COO* cancellation_result = multiplication_two_matrix(cancellation_a, cancellation_b);
+    assert(cancellation_result != NULL);
+    assert(cancellation_result->nnz == 2);
+    assert(cancellation_result->rows_indices[0] == 0 && cancellation_result->coll_indices[0] == 0 && fabsf(cancellation_result->values[0] - 2.0f) < 1e-5f);
+    assert(cancellation_result->rows_indices[1] == 0 && cancellation_result->coll_indices[1] == 1 && fabsf(cancellation_result->values[1] - 3.0f) < 1e-5f);
+
+    free_matrix(cancellation_a);
+    free_matrix(cancellation_b);
+    free_matrix(cancellation_result);
 }
 
 void test_multiplication_matrix_and_vector(void)
@@ -174,17 +193,17 @@ void test_multiplication_matrix_and_sparse_vector(void)
     float val_a[] = { 3.0f, 2.0f };
     COO* A = create_matrix(2, 2, 1000000000, row_a, col_a, val_a);
 
-    int row_v[] = { 999999999, 5 };
-    int col_v[] = { 0, 0 };
-    float val_v[] = { 4.0f, 7.0f };
-    COO* V = create_matrix(2, 1000000000, 1, row_v, col_v, val_v);
+    int row_v[] = { 999999999, 5, 5 };
+    int col_v[] = { 0, 0, 0 };
+    float val_v[] = { 4.0f, 7.0f, -2.0f };
+    COO* V = create_matrix(3, 1000000000, 1, row_v, col_v, val_v);
 
     COO* result = multiplication_matrix_and_vector_coo(A, V);
     assert(result != NULL);
     assert(result->rows == 2);
     assert(result->columns == 1);
     assert(result->nnz == 2);
-    assert(result->rows_indices[0] == 0 && fabsf(result->values[0] - 14.0f) < 1e-5f);
+    assert(result->rows_indices[0] == 0 && fabsf(result->values[0] - 10.0f) < 1e-5f);
     assert(result->rows_indices[1] == 1 && fabsf(result->values[1] - 12.0f) < 1e-5f);
 
     V->rows--;
