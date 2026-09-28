@@ -70,6 +70,23 @@ gcc tests.c COO.c -lm -o tests
 All tests passed
 ```
 
+## Измерение производительности
+
+Исполняемый файл `benchmark` сравнивает операции умножения для COO и CSparse на 12 матрицах из SuiteSparse Matrix Collection. В набор входят `roadNet-PA`, `roadNet-TX` и `roadNet-CA` размером более миллиона строк и столбцов.
+
+```bash
+cd build
+./benchmark
+```
+
+Для запуска на одной матрице можно передать путь и имя:
+
+```bash
+./benchmark ../matrices/roadNet-PA/roadNet-PA.mtx roadNet-PA
+```
+
+Итоговые измерения сохранены в `benchmark_results_wsl.txt`, результаты профилирования — в `profiling_raw_wsl.txt` и `profiling_results.csv`. Скрипт `results.py` строит графики по этим файлам.
+
 ## Выводы
 
 В ходе работы были реализованы основные примитивы для работы с разреженными матрицами в формате COO. Проведено сравнение производительности с SuiteSparse  (в рамках лабораторной работы).

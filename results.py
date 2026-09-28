@@ -70,7 +70,7 @@ for i in range(0, len(my_res), 2):
     vec_cs_errors[1].append(cs_res[i+1]['q3'] - cs_res[i+1]['time'])
     vec_nnz.append(my_res[i+1]['nnz'])
 
-fig, axes = plt.subplots(3, 2, figsize=(16, 24))
+fig, axes = plt.subplots(3, 2, figsize=(18, 24))
 fig.suptitle('Median execution time; error bars show the Q1-Q3 interval', fontsize=15, y=0.985)
 
 ax1 = axes[0, 0]
@@ -81,6 +81,7 @@ ax1.set_xticks(x)
 ax1.set_xticklabels(mat_names, rotation=25, ha='right', fontsize=10)
 ax1.set_ylabel('Median time (ms)', fontsize=11)
 ax1.set_title('Matrix-Matrix Multiplication (COO)', fontsize=12)
+ax1.set_yscale('log')
 ax1.legend(fontsize=10)
 ax1.grid(axis='y', alpha=0.3)
 
@@ -90,6 +91,7 @@ ax2.set_xticks(x)
 ax2.set_xticklabels(mat_names, rotation=25, ha='right', fontsize=10)
 ax2.set_ylabel('Median time (ms)', fontsize=11)
 ax2.set_title('Matrix-Matrix Multiplication (CSparse)', fontsize=12)
+ax2.set_yscale('log')
 ax2.legend(fontsize=10)
 ax2.grid(axis='y', alpha=0.3)
 
@@ -100,6 +102,7 @@ ax3.set_xticks(x)
 ax3.set_xticklabels(vec_names, rotation=25, ha='right', fontsize=10)
 ax3.set_ylabel('Median time (ms)', fontsize=11)
 ax3.set_title('Matrix-Vector Multiplication (COO)', fontsize=12)
+ax3.set_yscale('log')
 ax3.legend(fontsize=10)
 ax3.grid(axis='y', alpha=0.3)
 
@@ -109,6 +112,7 @@ ax4.set_xticks(x)
 ax4.set_xticklabels(vec_names, rotation=25, ha='right', fontsize=10)
 ax4.set_ylabel('Median time (ms)', fontsize=11)
 ax4.set_title('Matrix-Vector Multiplication (CSparse)', fontsize=12)
+ax4.set_yscale('log')
 ax4.legend(fontsize=10)
 ax4.grid(axis='y', alpha=0.3)
 
@@ -118,6 +122,7 @@ ax5.scatter(mat_nnz, mat_cs_times, s=100, label='CSparse', color='#e74c3c')
 ax5.set_xlabel('NNZ', fontsize=11)
 ax5.set_ylabel('Median time (ms)', fontsize=11)
 ax5.set_title('Time vs NNZ (Matrix-Matrix, Log Scale)', fontsize=12)
+ax5.set_xscale('log')
 ax5.set_yscale('log')
 ax5.legend(fontsize=10)
 ax5.grid(True, alpha=0.3)
@@ -128,6 +133,7 @@ ax6.scatter(vec_nnz, vec_cs_times, s=100, label='CSparse', color='#e74c3c')
 ax6.set_xlabel('NNZ', fontsize=11)
 ax6.set_ylabel('Median time (ms)', fontsize=11)
 ax6.set_title('Time vs NNZ (Matrix-Vector, Log Scale)', fontsize=12)
+ax6.set_xscale('log')
 ax6.set_yscale('log')
 ax6.legend(fontsize=10)
 ax6.grid(True, alpha=0.3)
@@ -140,14 +146,18 @@ if os.path.exists(profile_file):
     profile_rows = []
     with open(profile_file, 'r', newline='') as f:
         for row in csv.DictReader(f):
+            total = float(row['total_ms'])
+            sort = float(row['sort_ms'])
+            accumulation = float(row['accumulation_ms'])
+            buffer_scan = float(row['buffer_scan_ms'])
             profile_rows.append({
                 'operation': row['operation'],
                 'name': row['matrix'],
-                'total': float(row['total_ms']),
-                'sort': float(row['sort_ms']),
-                'accumulation': float(row['accumulation_ms']),
-                'buffer_scan': float(row['buffer_scan_ms']),
-                'other': float(row['other_ms'])
+                'total': total,
+                'sort': sort,
+                'accumulation': accumulation,
+                'buffer_scan': buffer_scan,
+                'other': total - sort - accumulation - buffer_scan
             })
 
     matrix_profile = [row for row in profile_rows if row['operation'] == 'matrix']
@@ -170,7 +180,7 @@ if os.path.exists(profile_file):
         bottom = [sort_share[i] + accumulation_share[i] for i in x]
         if include_buffer:
             ax.bar(x, buffer_share, bottom=bottom,
-                   label='Touched-column bitmap', color='#e74c3c')
+                   label='Touched-word processing', color='#e74c3c')
             bottom = [bottom[i] + buffer_share[i] for i in x]
         ax.bar(x, other_share, bottom=bottom, label='Other phases', color='#95a5a6')
         ax.set_xticks(x)

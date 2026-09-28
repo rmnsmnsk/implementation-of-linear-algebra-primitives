@@ -499,9 +499,19 @@ void benchmark_matrix_vector(const char* path, const char* name)
     free_matrix(a);
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
     srand(42);
+
+    if (argc == 3) {
+        benchmark_matrix_multiply(argv[1], argv[2]);
+        benchmark_matrix_vector(argv[1], argv[2]);
+        return 0;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "Usage: %s [matrix.mtx name]\n", argv[0]);
+        return 1;
+    }
 
     const char* matrices[] = {
         "../matrices/dolphins.mtx",
@@ -512,7 +522,10 @@ int main(void)
         "../matrices/netscience.mtx",
         "../matrices/add20/add20.mtx",
         "../matrices/ca-GrQc/ca-GrQc.mtx",
-        "../matrices/ca-HepTh/ca-HepTh.mtx"
+        "../matrices/ca-HepTh/ca-HepTh.mtx",
+        "../matrices/roadNet-PA/roadNet-PA.mtx",
+        "../matrices/roadNet-TX/roadNet-TX.mtx",
+        "../matrices/roadNet-CA/roadNet-CA.mtx"
     };
     const char* names[] = {
         "dolphins",
@@ -523,7 +536,10 @@ int main(void)
         "netscience",
         "add20",
         "ca-GrQc",
-        "ca-HepTh"
+        "ca-HepTh",
+        "roadNet-PA",
+        "roadNet-TX",
+        "roadNet-CA"
     };
 
     int matrix_count = (int)(sizeof(matrices) / sizeof(matrices[0]));
