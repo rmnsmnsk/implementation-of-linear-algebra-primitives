@@ -1,12 +1,13 @@
 #include "COO.h"
+#include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef COO_PROFILE
-#include <string.h>
 #include <time.h>
 
 static COO_Profile active_profile;
@@ -152,21 +153,31 @@ typedef struct {
     float* values;
     float* row_buffer;
     uint64_t* touched_bits;
+    size_t* touched_words;
     size_t touched_word_count;
+    size_t touched_count;
     size_t capacity;
+    size_t max_capacity;
     int nnz;
 } MatrixMultiplyWorkspace;
 
 static bool initialize_multiply_workspace(const COO* first, const COO* second, MatrixMultiplyWorkspace* workspace)
 {
-    workspace->capacity = (size_t)first->nnz * (size_t)second->nnz;
     size_t matrix_elements = (size_t)first->rows * (size_t)second->columns;
+    workspace->max_capacity = matrix_elements;
+    if (workspace->max_capacity > INT_MAX)
+        workspace->max_capacity = INT_MAX;
+
+    workspace->capacity = (size_t)first->nnz * (size_t)second->nnz;
     if (workspace->capacity > matrix_elements)
         workspace->capacity = matrix_elements;
     if (workspace->capacity > 10000000)
         workspace->capacity = 10000000;
+    if (workspace->capacity == 0 && workspace->max_capacity > 0)
+        workspace->capacity = 1;
 
     workspace->nnz = 0;
+    workspace->touched_count = 0;
     workspace->row_start = calloc((size_t)first->columns + 1, sizeof(int));
     workspace->rows = malloc(sizeof(int) * workspace->capacity);
     workspace->columns = malloc(sizeof(int) * workspace->capacity);
@@ -174,8 +185,10 @@ static bool initialize_multiply_workspace(const COO* first, const COO* second, M
     workspace->row_buffer = calloc((size_t)second->columns, sizeof(float));
     workspace->touched_word_count = ((size_t)second->columns + 63) / 64;
     workspace->touched_bits = calloc(workspace->touched_word_count, sizeof(uint64_t));
+    workspace->touched_words = malloc(sizeof(size_t) * workspace->touched_word_count);
 
-    return workspace->row_start && workspace->rows && workspace->columns && workspace->values && workspace->row_buffer && workspace->touched_bits;
+    return workspace->row_start && workspace->rows && workspace->columns && workspace->values && workspace->row_buffer && workspace->touched_bits
+        && workspace->touched_words;
 }
 
 static void free_multiply_workspace(MatrixMultiplyWorkspace* workspace)
@@ -186,6 +199,50 @@ static void free_multiply_workspace(MatrixMultiplyWorkspace* workspace)
     free(workspace->values);
     free(workspace->row_buffer);
     free(workspace->touched_bits);
+    free(workspace->touched_words);
+}
+
+static int compare_sizes(const void* first, const void* second)
+{
+    size_t a = *(const size_t*)first;
+    size_t b = *(const size_t*)second;
+    return (a > b) - (a < b);
+}
+
+static bool reserve_multiply_result(MatrixMultiplyWorkspace* workspace)
+{
+    if ((size_t)workspace->nnz < workspace->capacity)
+        return true;
+    if (workspace->capacity >= workspace->max_capacity)
+        return false;
+
+    size_t new_capacity = workspace->capacity > workspace->max_capacity / 2 ? workspace->max_capacity : workspace->capacity * 2;
+    if (new_capacity == 0)
+        new_capacity = 1;
+
+    int* new_rows = malloc(sizeof(int) * new_capacity);
+    int* new_columns = malloc(sizeof(int) * new_capacity);
+    float* new_values = malloc(sizeof(float) * new_capacity);
+    if (!new_rows || !new_columns || !new_values) {
+        free(new_rows);
+        free(new_columns);
+        free(new_values);
+        return false;
+    }
+
+    if (workspace->nnz > 0) {
+        memcpy(new_rows, workspace->rows, sizeof(int) * (size_t)workspace->nnz);
+        memcpy(new_columns, workspace->columns, sizeof(int) * (size_t)workspace->nnz);
+        memcpy(new_values, workspace->values, sizeof(float) * (size_t)workspace->nnz);
+    }
+    free(workspace->rows);
+    free(workspace->columns);
+    free(workspace->values);
+    workspace->rows = new_rows;
+    workspace->columns = new_columns;
+    workspace->values = new_values;
+    workspace->capacity = new_capacity;
+    return true;
 }
 
 static bool build_row_index(const COO* second, int row_count, int* row_start)
@@ -214,7 +271,10 @@ static bool accumulate_product_row(const COO* first, const COO* second, MatrixMu
                 return false;
             size_t word = (size_t)result_column / 64;
             unsigned int bit = (unsigned int)result_column % 64;
-            workspace->touched_bits[word] |= UINT64_C(1) << bit;
+            uint64_t mask = UINT64_C(1) << bit;
+            if (workspace->touched_bits[word] == 0)
+                workspace->touched_words[workspace->touched_count++] = word;
+            workspace->touched_bits[word] |= mask;
             workspace->row_buffer[result_column] += value * second->values[j];
         }
     }
@@ -223,7 +283,13 @@ static bool accumulate_product_row(const COO* first, const COO* second, MatrixMu
 
 static bool flush_product_row(MatrixMultiplyWorkspace* workspace, int row)
 {
-    for (size_t word = 0; word < workspace->touched_word_count; word++) {
+    bool sparse_scan = workspace->touched_count * 4 < workspace->touched_word_count;
+    if (sparse_scan)
+        qsort(workspace->touched_words, workspace->touched_count, sizeof(size_t), compare_sizes);
+
+    size_t scan_count = sparse_scan ? workspace->touched_count : workspace->touched_word_count;
+    for (size_t index = 0; index < scan_count; index++) {
+        size_t word = sparse_scan ? workspace->touched_words[index] : index;
         uint64_t bits = workspace->touched_bits[word];
         workspace->touched_bits[word] = 0;
         while (bits != 0) {
@@ -234,7 +300,7 @@ static bool flush_product_row(MatrixMultiplyWorkspace* workspace, int row)
             bits &= bits - 1;
             if (fabsf(value) <= 1e-6f)
                 continue;
-            if ((size_t)workspace->nnz >= workspace->capacity)
+            if (!reserve_multiply_result(workspace))
                 return false;
             workspace->rows[workspace->nnz] = row;
             workspace->columns[workspace->nnz] = column;
@@ -242,6 +308,7 @@ static bool flush_product_row(MatrixMultiplyWorkspace* workspace, int row)
             workspace->nnz++;
         }
     }
+    workspace->touched_count = 0;
     return true;
 }
 
