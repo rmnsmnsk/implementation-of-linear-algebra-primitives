@@ -1,6 +1,7 @@
-operation,matrix,before_median_us,after_median_us,reduction_percent
-matrix,add20,2882.296,2197.467,23.76
-matrix,ca-GrQc,13094.578,4351.711,66.77
-matrix,ca-HepTh,43480.173,13728.965,68.42
-vector,ca-GrQc,1175.114,360.723,69.30
-vector,ca-HepTh,2499.207,1155.080,53.78
+operation,matrix,before_ms,after_ms,reduction_percent,measurement
+matrix,roadNet-PA,>60000,483.865723,>99.19,single_profile_run_baseline_timeout_60s
+matrix,roadNet-TX,>60000,552.482666,>99.08,single_profile_run_baseline_timeout_60s
+matrix,roadNet-CA,>60000,717.309814,>98.80,single_profile_run_baseline_timeout_60s
+vector,roadNet-PA,149.093506,65.847168,55.83,single_profile_run
+vector,roadNet-TX,179.935547,89.799316,50.09,single_profile_run
+vector,roadNet-CA,250.889893,171.504395,31.64,single_profile_run
