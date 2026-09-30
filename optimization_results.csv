@@ -1,7 +1,7 @@
-operation,matrix,before_ms,after_ms,reduction_percent,measurement
-matrix,roadNet-PA,>60000,483.865723,>99.19,single_profile_run_baseline_timeout_60s
-matrix,roadNet-TX,>60000,552.482666,>99.08,single_profile_run_baseline_timeout_60s
-matrix,roadNet-CA,>60000,717.309814,>98.80,single_profile_run_baseline_timeout_60s
-vector,roadNet-PA,97.004545,23.586560,75.69,median_15_runs
-vector,roadNet-TX,95.880196,31.004321,67.66,median_15_runs
-vector,roadNet-CA,178.848936,45.317252,74.66,median_15_runs
+operation,matrix,before_ms,before_standard_deviation_ms,before_confidence_95_ms,after_ms,after_standard_deviation_ms,after_confidence_95_ms,reduction_percent,measurement
+matrix,roadNet-PA,>60000,,,196.729136867,8.203474455,4.542932730,>99.67,baseline_timeout_60s_and_after_mean_15_series
+matrix,roadNet-TX,>60000,,,256.601613800,13.605846657,7.534666736,>99.57,baseline_timeout_60s_and_after_mean_15_series
+matrix,roadNet-CA,>60000,,,406.109853533,15.284027212,8.464012151,>99.32,baseline_timeout_60s_and_after_mean_15_series
+vector,roadNet-PA,51.811034233,0.981806736,0.543706448,13.390218625,0.314953849,0.174415628,74.16,mean_15_series_95_percent_student_t
+vector,roadNet-TX,54.311111199,2.419976671,1.340138411,17.703176992,0.749671958,0.415154493,67.40,mean_15_series_95_percent_student_t
+vector,roadNet-CA,100.770220001,14.895202955,8.248688454,25.805245425,2.584025013,1.430985355,74.39,mean_15_series_95_percent_student_t

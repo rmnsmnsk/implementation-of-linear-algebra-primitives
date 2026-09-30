@@ -15,11 +15,12 @@
 #define WARMUP_RUNS 3
 #define MEASURED_RUNS 15
 #define MIN_SAMPLE_DURATION_MS 100.0
+#define STUDENT_T_95_DF14 2.1447866879
 
 typedef struct {
-    double median;
-    double first_quartile;
-    double third_quartile;
+    double mean;
+    double standard_deviation;
+    double confidence_95;
 } BenchmarkStats;
 
 static double monotonic_time_ms(void)
@@ -37,21 +38,39 @@ static double monotonic_time_ms(void)
 #endif
 }
 
-static int compare_doubles(const void* first, const void* second)
+static BenchmarkStats calculate_stats(const double* samples)
 {
-    double a = *(const double*)first;
-    double b = *(const double*)second;
-    return (a > b) - (a < b);
+    double sum = 0.0;
+    for (int i = 0; i < MEASURED_RUNS; i++)
+        sum += samples[i];
+
+    BenchmarkStats stats;
+    stats.mean = sum / MEASURED_RUNS;
+
+    double squared_deviations = 0.0;
+    for (int i = 0; i < MEASURED_RUNS; i++) {
+        double deviation = samples[i] - stats.mean;
+        squared_deviations += deviation * deviation;
+    }
+    stats.standard_deviation = sqrt(squared_deviations / (MEASURED_RUNS - 1));
+    stats.confidence_95 = STUDENT_T_95_DF14 * stats.standard_deviation / sqrt((double)MEASURED_RUNS);
+    return stats;
 }
 
-static BenchmarkStats calculate_stats(double* samples)
+static BenchmarkStats calculate_difference_stats(const double* first, const double* second)
 {
-    qsort(samples, MEASURED_RUNS, sizeof(double), compare_doubles);
-    BenchmarkStats stats;
-    stats.median = samples[MEASURED_RUNS / 2];
-    stats.first_quartile = samples[MEASURED_RUNS / 4];
-    stats.third_quartile = samples[(3 * MEASURED_RUNS) / 4];
-    return stats;
+    double differences[MEASURED_RUNS];
+    for (int i = 0; i < MEASURED_RUNS; i++)
+        differences[i] = first[i] - second[i];
+    return calculate_stats(differences);
+}
+
+static void print_samples(const char* label, const char* name, const double* samples)
+{
+    printf("%s:%s", label, name);
+    for (int i = 0; i < MEASURED_RUNS; i++)
+        printf(",%.9f", samples[i]);
+    printf("\n");
 }
 
 COO* create_random_vector(int size, float density)
@@ -439,9 +458,14 @@ void benchmark_matrix_multiply(const char* path, const char* name)
 
     BenchmarkStats my_stats = calculate_stats(my_samples);
     BenchmarkStats cs_stats = calculate_stats(cs_samples);
+    BenchmarkStats difference_stats = calculate_difference_stats(my_samples, cs_samples);
     printf("REPETITIONS:%s,%d,%d\n", name, my_repetitions, cs_repetitions);
-    printf("RESULT_MY:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, my_result->nnz, my_stats.median, my_stats.first_quartile, my_stats.third_quartile);
-    printf("RESULT_CS:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, get_cs_effective_nnz(cs_result), cs_stats.median, cs_stats.first_quartile, cs_stats.third_quartile);
+    printf("RESULT_MY:%s,%d,%d,%.9f,%.9f,%.9f\n", name, a->nnz, my_result->nnz, my_stats.mean, my_stats.standard_deviation, my_stats.confidence_95);
+    printf("RESULT_CS:%s,%d,%d,%.9f,%.9f,%.9f\n", name, a->nnz, get_cs_effective_nnz(cs_result), cs_stats.mean, cs_stats.standard_deviation, cs_stats.confidence_95);
+    printf("RESULT_DIFFERENCE:%s,%.9f,%.9f,%.9f\n", name, difference_stats.mean, difference_stats.standard_deviation,
+        difference_stats.confidence_95);
+    print_samples("SAMPLES_MY", name, my_samples);
+    print_samples("SAMPLES_CS", name, cs_samples);
     printf("VERIFY:%s,%s\n", name, results_equal(my_result, cs_result) ? "OK" : "MISMATCH");
 
     free_matrix(my_result);
@@ -553,11 +577,25 @@ void benchmark_matrix_vector(const char* path, const char* name)
     BenchmarkStats indexed_stats = calculate_stats(indexed_samples);
     BenchmarkStats index_build_stats = calculate_stats(index_build_samples);
     BenchmarkStats cs_stats = calculate_stats(cs_samples);
+    BenchmarkStats optimization_difference_stats = calculate_difference_stats(baseline_samples, indexed_samples);
+    BenchmarkStats comparison_difference_stats = calculate_difference_stats(indexed_samples, cs_samples);
     printf("REPETITIONS:%s,%d,%d,%d,%d\n", name, baseline_repetitions, indexed_repetitions, index_build_repetitions, cs_repetitions);
-    printf("RESULT_BASELINE:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, baseline_result->nnz, baseline_stats.median, baseline_stats.first_quartile, baseline_stats.third_quartile);
-    printf("RESULT_INDEX_BUILD:%s,%d,%.6f,%.6f,%.6f\n", name, a->nnz, index_build_stats.median, index_build_stats.first_quartile, index_build_stats.third_quartile);
-    printf("RESULT_MY:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, indexed_result->nnz, indexed_stats.median, indexed_stats.first_quartile, indexed_stats.third_quartile);
-    printf("RESULT_CS:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, get_cs_effective_nnz(cs_result), cs_stats.median, cs_stats.first_quartile, cs_stats.third_quartile);
+    printf("RESULT_BASELINE:%s,%d,%d,%.9f,%.9f,%.9f\n", name, a->nnz, baseline_result->nnz, baseline_stats.mean,
+        baseline_stats.standard_deviation, baseline_stats.confidence_95);
+    printf("RESULT_INDEX_BUILD:%s,%d,%.9f,%.9f,%.9f\n", name, a->nnz, index_build_stats.mean,
+        index_build_stats.standard_deviation, index_build_stats.confidence_95);
+    printf("RESULT_MY:%s,%d,%d,%.9f,%.9f,%.9f\n", name, a->nnz, indexed_result->nnz, indexed_stats.mean,
+        indexed_stats.standard_deviation, indexed_stats.confidence_95);
+    printf("RESULT_CS:%s,%d,%d,%.9f,%.9f,%.9f\n", name, a->nnz, get_cs_effective_nnz(cs_result), cs_stats.mean,
+        cs_stats.standard_deviation, cs_stats.confidence_95);
+    printf("RESULT_OPTIMIZATION_DIFFERENCE:%s,%.9f,%.9f,%.9f\n", name, optimization_difference_stats.mean,
+        optimization_difference_stats.standard_deviation, optimization_difference_stats.confidence_95);
+    printf("RESULT_DIFFERENCE:%s,%.9f,%.9f,%.9f\n", name, comparison_difference_stats.mean,
+        comparison_difference_stats.standard_deviation, comparison_difference_stats.confidence_95);
+    print_samples("SAMPLES_BASELINE", name, baseline_samples);
+    print_samples("SAMPLES_INDEX_BUILD", name, index_build_samples);
+    print_samples("SAMPLES_MY", name, indexed_samples);
+    print_samples("SAMPLES_CS", name, cs_samples);
     printf("VERIFY_BASELINE:%s,%s\n", name, results_equal(baseline_result, cs_result) ? "OK" : "MISMATCH");
     printf("VERIFY_INDEXED:%s,%s\n", name, results_equal(indexed_result, cs_result) ? "OK" : "MISMATCH");
 
@@ -574,6 +612,7 @@ void benchmark_matrix_vector(const char* path, const char* name)
 int main(int argc, char** argv)
 {
     srand(42);
+    printf("STATISTICS:mean,sample_standard_deviation,95_percent_student_t_confidence_half_width,n=%d\n", MEASURED_RUNS);
 
     if (argc == 3) {
         benchmark_matrix_multiply(argv[1], argv[2]);
