@@ -15,6 +15,9 @@ perf record -e cpu-clock:u -F 999 -g --call-graph dwarf,16384 \
   ./profile_benchmark matrices/roadNet-CA/roadNet-CA.mtx vector 20
 perf report --stdio --no-children --percent-limit 0.5 --sort symbol
 
+Interactive flame graph:
+perf_flamegraph.svg
+
 Relevant perf report entries:
 60.35%  multiplication_matrix_and_vector_coo
   34.75%  find_sparse_vector_value (inlined)
@@ -36,11 +39,3 @@ INDEX_MS: 148.208984
 ACCUMULATION_MS: 3172.172607
 LOOKUP_CALLS: 110664280
 LOOKUP_COMPARISONS: 92367160
-
-Interpretation:
-The phase timer grouped matrix traversal, hash lookup, multiplication, and
-accumulation into one interval. Therefore its 81.97% share must not be
-interpreted as the cost of hash-table access alone. Perf attributes 34.75%
-to the inlined lookup and 8.17% to the inlined hash calculation. The rest of
-the multiplication function is the loop over all matrix nonzeros, including
-index reads, multiplication, and accumulation.
