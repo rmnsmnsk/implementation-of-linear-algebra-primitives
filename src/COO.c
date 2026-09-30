@@ -432,6 +432,316 @@ float* multiplication_matrix_and_vector(COO* matrix, const float* vector)
 }
 
 typedef struct {
+    int column;
+    int row;
+    float value;
+} COO_ColumnElement;
+
+struct COO_ColumnIndex {
+    int rows;
+    int columns;
+    int nnz;
+    int column_count;
+    int* column_indices;
+    int* column_offsets;
+    int* row_indices;
+    float* values;
+};
+
+typedef struct {
+    int* keys;
+    float* values;
+    unsigned char* occupied;
+    size_t capacity;
+    size_t size;
+    bool dense;
+} RowAccumulator;
+
+#define DENSE_ROW_ACCUMULATOR_LIMIT 10000000
+
+static int compare_column_elements(const void* first, const void* second)
+{
+    const COO_ColumnElement* a = first;
+    const COO_ColumnElement* b = second;
+    if (a->column != b->column)
+        return (a->column > b->column) - (a->column < b->column);
+    return (a->row > b->row) - (a->row < b->row);
+}
+
+static size_t integer_hash(int key, size_t capacity)
+{
+    uint32_t value = (uint32_t)key;
+    value ^= value >> 16;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return (size_t)value & (capacity - 1);
+}
+
+void free_coo_column_index(COO_ColumnIndex* index)
+{
+    if (!index)
+        return;
+    free(index->column_indices);
+    free(index->column_offsets);
+    free(index->row_indices);
+    free(index->values);
+    free(index);
+}
+
+COO_ColumnIndex* create_coo_column_index(const COO* matrix)
+{
+    if (!matrix || matrix->rows < 0 || matrix->columns < 0 || matrix->nnz < 0)
+        return NULL;
+    if (matrix->nnz > 0 && (!matrix->rows_indices || !matrix->coll_indices || !matrix->values))
+        return NULL;
+
+    COO_ColumnIndex* index = calloc(1, sizeof(COO_ColumnIndex));
+    if (!index)
+        return NULL;
+    index->rows = matrix->rows;
+    index->columns = matrix->columns;
+    index->nnz = matrix->nnz;
+    if (matrix->nnz == 0)
+        return index;
+
+    COO_ColumnElement* elements = malloc(sizeof(COO_ColumnElement) * (size_t)matrix->nnz);
+    if (!elements) {
+        free_coo_column_index(index);
+        return NULL;
+    }
+
+    for (int i = 0; i < matrix->nnz; i++) {
+        int row = matrix->rows_indices[i];
+        int column = matrix->coll_indices[i];
+        if (row < 0 || row >= matrix->rows || column < 0 || column >= matrix->columns) {
+            free(elements);
+            free_coo_column_index(index);
+            return NULL;
+        }
+        elements[i].column = column;
+        elements[i].row = row;
+        elements[i].value = matrix->values[i];
+    }
+    qsort(elements, (size_t)matrix->nnz, sizeof(COO_ColumnElement), compare_column_elements);
+
+    index->column_count = 1;
+    for (int i = 1; i < matrix->nnz; i++) {
+        if (elements[i].column != elements[i - 1].column)
+            index->column_count++;
+    }
+
+    index->column_indices = malloc(sizeof(int) * (size_t)index->column_count);
+    index->column_offsets = malloc(sizeof(int) * ((size_t)index->column_count + 1));
+    index->row_indices = malloc(sizeof(int) * (size_t)matrix->nnz);
+    index->values = malloc(sizeof(float) * (size_t)matrix->nnz);
+    if (!index->column_indices || !index->column_offsets || !index->row_indices || !index->values) {
+        free(elements);
+        free_coo_column_index(index);
+        return NULL;
+    }
+
+    int column_position = -1;
+    int previous_column = -1;
+    for (int i = 0; i < matrix->nnz; i++) {
+        if (i == 0 || elements[i].column != previous_column) {
+            column_position++;
+            previous_column = elements[i].column;
+            index->column_indices[column_position] = previous_column;
+            index->column_offsets[column_position] = i;
+        }
+        index->row_indices[i] = elements[i].row;
+        index->values[i] = elements[i].value;
+    }
+    index->column_offsets[index->column_count] = matrix->nnz;
+    free(elements);
+    return index;
+}
+
+static int find_indexed_column(const COO_ColumnIndex* index, int column)
+{
+    int left = 0;
+    int right = index->column_count;
+    while (left < right) {
+        int middle = left + (right - left) / 2;
+        if (index->column_indices[middle] < column)
+            left = middle + 1;
+        else
+            right = middle;
+    }
+    if (left < index->column_count && index->column_indices[left] == column)
+        return left;
+    return -1;
+}
+
+static void free_row_accumulator(RowAccumulator* accumulator)
+{
+    free(accumulator->keys);
+    free(accumulator->values);
+    free(accumulator->occupied);
+}
+
+static bool initialize_row_accumulator(RowAccumulator* accumulator, int row_count)
+{
+    if (row_count > 0 && row_count <= DENSE_ROW_ACCUMULATOR_LIMIT) {
+        accumulator->capacity = (size_t)row_count;
+        accumulator->values = calloc(accumulator->capacity, sizeof(float));
+        accumulator->occupied = calloc(accumulator->capacity, sizeof(unsigned char));
+        accumulator->dense = true;
+        return accumulator->values && accumulator->occupied;
+    }
+
+    accumulator->capacity = 8;
+    accumulator->keys = malloc(sizeof(int) * accumulator->capacity);
+    accumulator->values = calloc(accumulator->capacity, sizeof(float));
+    accumulator->occupied = calloc(accumulator->capacity, sizeof(unsigned char));
+    return accumulator->keys && accumulator->values && accumulator->occupied;
+}
+
+static bool grow_row_accumulator(RowAccumulator* accumulator)
+{
+    if (accumulator->capacity > SIZE_MAX / 2)
+        return false;
+    size_t new_capacity = accumulator->capacity * 2;
+    int* new_keys = malloc(sizeof(int) * new_capacity);
+    float* new_values = calloc(new_capacity, sizeof(float));
+    unsigned char* new_occupied = calloc(new_capacity, sizeof(unsigned char));
+    if (!new_keys || !new_values || !new_occupied) {
+        free(new_keys);
+        free(new_values);
+        free(new_occupied);
+        return false;
+    }
+
+    for (size_t i = 0; i < accumulator->capacity; i++) {
+        if (!accumulator->occupied[i])
+            continue;
+        size_t position = integer_hash(accumulator->keys[i], new_capacity);
+        while (new_occupied[position])
+            position = (position + 1) & (new_capacity - 1);
+        new_occupied[position] = 1;
+        new_keys[position] = accumulator->keys[i];
+        new_values[position] = accumulator->values[i];
+    }
+
+    free(accumulator->keys);
+    free(accumulator->values);
+    free(accumulator->occupied);
+    accumulator->keys = new_keys;
+    accumulator->values = new_values;
+    accumulator->occupied = new_occupied;
+    accumulator->capacity = new_capacity;
+    return true;
+}
+
+static bool add_row_value(RowAccumulator* accumulator, int row, float value)
+{
+    if (accumulator->dense) {
+        size_t position = (size_t)row;
+        if (!accumulator->occupied[position]) {
+            accumulator->occupied[position] = 1;
+            accumulator->size++;
+        }
+        accumulator->values[position] += value;
+        return true;
+    }
+
+    if ((accumulator->size + 1) * 2 > accumulator->capacity && !grow_row_accumulator(accumulator))
+        return false;
+
+    size_t position = integer_hash(row, accumulator->capacity);
+    while (accumulator->occupied[position] && accumulator->keys[position] != row)
+        position = (position + 1) & (accumulator->capacity - 1);
+    if (!accumulator->occupied[position]) {
+        accumulator->occupied[position] = 1;
+        accumulator->keys[position] = row;
+        accumulator->size++;
+    }
+    accumulator->values[position] += value;
+    return true;
+}
+
+static COO* create_indexed_vector_result(const COO_ColumnIndex* index, const RowAccumulator* accumulator)
+{
+    COO* result = calloc(1, sizeof(COO));
+    if (!result)
+        return NULL;
+    result->rows = index->rows;
+    result->columns = 1;
+
+    for (size_t i = 0; i < accumulator->capacity; i++) {
+        if (accumulator->occupied[i] && fabsf(accumulator->values[i]) > 1e-6f)
+            result->nnz++;
+    }
+    if (result->nnz == 0)
+        return result;
+
+    result->rows_indices = malloc(sizeof(int) * (size_t)result->nnz);
+    result->coll_indices = malloc(sizeof(int) * (size_t)result->nnz);
+    result->values = malloc(sizeof(float) * (size_t)result->nnz);
+    if (!result->rows_indices || !result->coll_indices || !result->values) {
+        free_matrix(result);
+        return NULL;
+    }
+
+    int result_position = 0;
+    for (size_t i = 0; i < accumulator->capacity; i++) {
+        if (!accumulator->occupied[i] || fabsf(accumulator->values[i]) <= 1e-6f)
+            continue;
+        result->rows_indices[result_position] = accumulator->dense ? (int)i : accumulator->keys[i];
+        result->coll_indices[result_position] = 0;
+        result->values[result_position] = accumulator->values[i];
+        result_position++;
+    }
+    if (!accumulator->dense && !sort_matrix(result)) {
+        free_matrix(result);
+        return NULL;
+    }
+    return result;
+}
+
+COO* multiplication_matrix_and_vector_coo_indexed(const COO_ColumnIndex* index, const COO* vector)
+{
+    if (!index || !vector || vector->columns != 1 || index->columns != vector->rows || vector->nnz < 0)
+        return NULL;
+    if (vector->nnz > 0 && (!vector->rows_indices || !vector->coll_indices || !vector->values))
+        return NULL;
+
+    RowAccumulator accumulator = { 0 };
+    if (!initialize_row_accumulator(&accumulator, index->rows)) {
+        free_row_accumulator(&accumulator);
+        return NULL;
+    }
+
+    for (int i = 0; i < vector->nnz; i++) {
+        int column = vector->rows_indices[i];
+        if (column < 0 || column >= vector->rows || vector->coll_indices[i] != 0) {
+            free_row_accumulator(&accumulator);
+            return NULL;
+        }
+        if (fabsf(vector->values[i]) <= 1e-6f)
+            continue;
+
+        int column_position = find_indexed_column(index, column);
+        if (column_position < 0)
+            continue;
+        int begin = index->column_offsets[column_position];
+        int end = index->column_offsets[column_position + 1];
+        for (int j = begin; j < end; j++) {
+            if (!add_row_value(&accumulator, index->row_indices[j], index->values[j] * vector->values[i])) {
+                free_row_accumulator(&accumulator);
+                return NULL;
+            }
+        }
+    }
+
+    COO* result = create_indexed_vector_result(index, &accumulator);
+    free_row_accumulator(&accumulator);
+    return result;
+}
+
+typedef struct {
     int* keys;
     float* values;
     unsigned char* occupied;

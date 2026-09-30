@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #ifdef _WIN32
@@ -282,6 +283,30 @@ static double measure_coo_operation(CooOperation operation, COO* first, COO* sec
     return (monotonic_time_ms() - start) / repetitions;
 }
 
+static double measure_indexed_vector_operation(const COO_ColumnIndex* index, const COO* vector, int repetitions)
+{
+    double start = monotonic_time_ms();
+    for (int i = 0; i < repetitions; i++) {
+        COO* result = multiplication_matrix_and_vector_coo_indexed(index, vector);
+        if (!result)
+            return -1.0;
+        free_matrix(result);
+    }
+    return (monotonic_time_ms() - start) / repetitions;
+}
+
+static double measure_column_index_build(const COO* matrix, int repetitions)
+{
+    double start = monotonic_time_ms();
+    for (int i = 0; i < repetitions; i++) {
+        COO_ColumnIndex* index = create_coo_column_index(matrix);
+        if (!index)
+            return -1.0;
+        free_coo_column_index(index);
+    }
+    return (monotonic_time_ms() - start) / repetitions;
+}
+
 static double measure_cs_operation(const cs* first, const cs* second, int repetitions)
 {
     double start = monotonic_time_ms();
@@ -299,6 +324,30 @@ static int choose_coo_repetitions(CooOperation operation, COO* first, COO* secon
     int repetitions = 1;
     while (repetitions < (1 << 20)) {
         double average = measure_coo_operation(operation, first, second, repetitions);
+        if (average < 0.0 || average * repetitions >= MIN_SAMPLE_DURATION_MS)
+            break;
+        repetitions *= 2;
+    }
+    return repetitions;
+}
+
+static int choose_indexed_vector_repetitions(const COO_ColumnIndex* index, const COO* vector)
+{
+    int repetitions = 1;
+    while (repetitions < (1 << 20)) {
+        double average = measure_indexed_vector_operation(index, vector, repetitions);
+        if (average < 0.0 || average * repetitions >= MIN_SAMPLE_DURATION_MS)
+            break;
+        repetitions *= 2;
+    }
+    return repetitions;
+}
+
+static int choose_index_build_repetitions(const COO* matrix)
+{
+    int repetitions = 1;
+    while (repetitions < (1 << 20)) {
+        double average = measure_column_index_build(matrix, repetitions);
         if (average < 0.0 || average * repetitions >= MIN_SAMPLE_DURATION_MS)
             break;
         repetitions *= 2;
@@ -425,10 +474,12 @@ void benchmark_matrix_vector(const char* path, const char* name)
         return;
     }
 
+    COO_ColumnIndex* column_index = create_coo_column_index(a);
     cs* ca = to_cs(a);
     cs* cv = to_cs(v);
-    if (!ca || !cv) {
-        printf("cs convert failed\n");
+    if (!column_index || !ca || !cv) {
+        printf("index or cs conversion failed\n");
+        free_coo_column_index(column_index);
         cs_spfree(ca);
         cs_spfree(cv);
         free_matrix(v);
@@ -437,32 +488,43 @@ void benchmark_matrix_vector(const char* path, const char* name)
     }
 
     for (int i = 0; i < WARMUP_RUNS; i++) {
-        COO* warmup_my = multiplication_matrix_and_vector_coo(a, v);
+        COO* warmup_baseline = multiplication_matrix_and_vector_coo(a, v);
+        COO* warmup_indexed = multiplication_matrix_and_vector_coo_indexed(column_index, v);
         cs* warmup_cs = cs_multiply(ca, cv);
-        if (!warmup_my || !warmup_cs) {
+        if (!warmup_baseline || !warmup_indexed || !warmup_cs) {
             printf("warmup failed\n");
-            free_matrix(warmup_my);
+            free_matrix(warmup_baseline);
+            free_matrix(warmup_indexed);
             cs_spfree(warmup_cs);
+            free_coo_column_index(column_index);
             cs_spfree(ca);
             cs_spfree(cv);
             free_matrix(v);
             free_matrix(a);
             return;
         }
-        free_matrix(warmup_my);
+        free_matrix(warmup_baseline);
+        free_matrix(warmup_indexed);
         cs_spfree(warmup_cs);
     }
 
-    double my_samples[MEASURED_RUNS];
+    double baseline_samples[MEASURED_RUNS];
+    double indexed_samples[MEASURED_RUNS];
+    double index_build_samples[MEASURED_RUNS];
     double cs_samples[MEASURED_RUNS];
-    int my_repetitions = choose_coo_repetitions(multiplication_matrix_and_vector_coo, a, v);
+    int baseline_repetitions = choose_coo_repetitions(multiplication_matrix_and_vector_coo, a, v);
+    int indexed_repetitions = choose_indexed_vector_repetitions(column_index, v);
+    int index_build_repetitions = choose_index_build_repetitions(a);
     int cs_repetitions = choose_cs_repetitions(ca, cv);
 
     for (int i = 0; i < MEASURED_RUNS; i++) {
-        my_samples[i] = measure_coo_operation(multiplication_matrix_and_vector_coo, a, v, my_repetitions);
+        baseline_samples[i] = measure_coo_operation(multiplication_matrix_and_vector_coo, a, v, baseline_repetitions);
+        indexed_samples[i] = measure_indexed_vector_operation(column_index, v, indexed_repetitions);
+        index_build_samples[i] = measure_column_index_build(a, index_build_repetitions);
         cs_samples[i] = measure_cs_operation(ca, cv, cs_repetitions);
-        if (my_samples[i] < 0.0 || cs_samples[i] < 0.0) {
+        if (baseline_samples[i] < 0.0 || indexed_samples[i] < 0.0 || index_build_samples[i] < 0.0 || cs_samples[i] < 0.0) {
             printf("measurement failed\n");
+            free_coo_column_index(column_index);
             cs_spfree(ca);
             cs_spfree(cv);
             free_matrix(v);
@@ -471,12 +533,15 @@ void benchmark_matrix_vector(const char* path, const char* name)
         }
     }
 
-    COO* my_result = multiplication_matrix_and_vector_coo(a, v);
+    COO* baseline_result = multiplication_matrix_and_vector_coo(a, v);
+    COO* indexed_result = multiplication_matrix_and_vector_coo_indexed(column_index, v);
     cs* cs_result = cs_multiply(ca, cv);
-    if (!my_result || !cs_result) {
+    if (!baseline_result || !indexed_result || !cs_result) {
         printf("verification calculation failed\n");
-        free_matrix(my_result);
+        free_matrix(baseline_result);
+        free_matrix(indexed_result);
         cs_spfree(cs_result);
+        free_coo_column_index(column_index);
         cs_spfree(ca);
         cs_spfree(cv);
         free_matrix(v);
@@ -484,15 +549,22 @@ void benchmark_matrix_vector(const char* path, const char* name)
         return;
     }
 
-    BenchmarkStats my_stats = calculate_stats(my_samples);
+    BenchmarkStats baseline_stats = calculate_stats(baseline_samples);
+    BenchmarkStats indexed_stats = calculate_stats(indexed_samples);
+    BenchmarkStats index_build_stats = calculate_stats(index_build_samples);
     BenchmarkStats cs_stats = calculate_stats(cs_samples);
-    printf("REPETITIONS:%s,%d,%d\n", name, my_repetitions, cs_repetitions);
-    printf("RESULT_MY:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, my_result->nnz, my_stats.median, my_stats.first_quartile, my_stats.third_quartile);
+    printf("REPETITIONS:%s,%d,%d,%d,%d\n", name, baseline_repetitions, indexed_repetitions, index_build_repetitions, cs_repetitions);
+    printf("RESULT_BASELINE:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, baseline_result->nnz, baseline_stats.median, baseline_stats.first_quartile, baseline_stats.third_quartile);
+    printf("RESULT_INDEX_BUILD:%s,%d,%.6f,%.6f,%.6f\n", name, a->nnz, index_build_stats.median, index_build_stats.first_quartile, index_build_stats.third_quartile);
+    printf("RESULT_MY:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, indexed_result->nnz, indexed_stats.median, indexed_stats.first_quartile, indexed_stats.third_quartile);
     printf("RESULT_CS:%s,%d,%d,%.6f,%.6f,%.6f\n", name, a->nnz, get_cs_effective_nnz(cs_result), cs_stats.median, cs_stats.first_quartile, cs_stats.third_quartile);
-    printf("VERIFY:%s,%s\n", name, results_equal(my_result, cs_result) ? "OK" : "MISMATCH");
+    printf("VERIFY_BASELINE:%s,%s\n", name, results_equal(baseline_result, cs_result) ? "OK" : "MISMATCH");
+    printf("VERIFY_INDEXED:%s,%s\n", name, results_equal(indexed_result, cs_result) ? "OK" : "MISMATCH");
 
-    free_matrix(my_result);
+    free_matrix(baseline_result);
+    free_matrix(indexed_result);
     cs_spfree(cs_result);
+    free_coo_column_index(column_index);
     cs_spfree(ca);
     cs_spfree(cv);
     free_matrix(v);
@@ -508,8 +580,19 @@ int main(int argc, char** argv)
         benchmark_matrix_vector(argv[1], argv[2]);
         return 0;
     }
+    if (argc == 4) {
+        if (strcmp(argv[3], "matrix") == 0)
+            benchmark_matrix_multiply(argv[1], argv[2]);
+        else if (strcmp(argv[3], "vector") == 0)
+            benchmark_matrix_vector(argv[1], argv[2]);
+        else {
+            fprintf(stderr, "Unknown operation: %s\n", argv[3]);
+            return 1;
+        }
+        return 0;
+    }
     if (argc != 1) {
-        fprintf(stderr, "Usage: %s [matrix.mtx name]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [matrix.mtx name [matrix|vector]]\n", argv[0]);
         return 1;
     }
 

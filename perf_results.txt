@@ -1,41 +1,31 @@
-Linux perf profiling of optimized COO matrix-vector multiplication
+Linux perf profiling of indexed COO matrix-vector multiplication
 
 Matrix: roadNet-CA
 Matrix size: 1971281 x 1971281
 Matrix NNZ after loading: 5533214
-Operation: matrix-vector multiplication with a 10% sparse vector
-Repetitions: 20
+Vector density: 10%
+Repetitions: 100
 Compiler options: -O3 -g
 Sampling event: cpu-clock:u
 Sampling frequency: 999 Hz
 Call graph: DWARF
 
-Command:
-perf record -e cpu-clock:u -F 999 -g --call-graph dwarf,16384 \
-  ./profile_benchmark matrices/roadNet-CA/roadNet-CA.mtx vector 20
-perf report --stdio --no-children --percent-limit 0.5 --sort symbol
-
-Interactive flame graph:
-perf_flamegraph.svg
+The process was paused after loading the matrix, creating the vector, sorting the
+input and building the column index. perf was attached while the process was
+paused. Recording therefore contains only the 100 indexed multiplications and
+result deallocations; preparation is excluded.
 
 Relevant perf report entries:
-60.35%  multiplication_matrix_and_vector_coo
-  34.75%  find_sparse_vector_value (inlined)
-  16.36%  multiplication_matrix_and_vector_coo (loop body outside lookup)
-   8.17%  sparse_vector_hash (inlined inside find_sparse_vector_value)
-   1.08%  initialize_sparse_vector_index (inlined)
- 8.26%  sort_matrix
- 4.04%  compare_coo_elements
- 0.60%  read_matrix_market
+99.85%  multiplication_matrix_and_vector_coo_indexed
+  39.78%  find_indexed_column (inlined)
+  38.76%  create_indexed_vector_result (inlined)
+  14.56%  multiplication_matrix_and_vector_coo_indexed (loop body)
+   6.75%  add_row_value (inlined)
 
-Samples: 5K cpu-clock:u samples
+Samples: 2637 cpu-clock:u samples
 Lost samples: 0
 
-Program counters for the 20 measured calls:
-TOTAL_MS: 3881.730957
-SORT_MS: 424.486328
-WORKSPACE_MS: 135.810059
-INDEX_MS: 148.208984
-ACCUMULATION_MS: 3172.172607
-LOOKUP_CALLS: 110664280
-LOOKUP_COMPARISONS: 92367160
+The former find_sparse_vector_value call is absent because the indexed
+algorithm starts from nonzero vector entries and visits only their matrix
+columns. The remaining time is split mainly between locating those columns and
+scanning the row accumulator while the sparse result is created.

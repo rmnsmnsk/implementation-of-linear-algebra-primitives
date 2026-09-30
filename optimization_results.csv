@@ -2,6 +2,6 @@ operation,matrix,before_ms,after_ms,reduction_percent,measurement
 matrix,roadNet-PA,>60000,483.865723,>99.19,single_profile_run_baseline_timeout_60s
 matrix,roadNet-TX,>60000,552.482666,>99.08,single_profile_run_baseline_timeout_60s
 matrix,roadNet-CA,>60000,717.309814,>98.80,single_profile_run_baseline_timeout_60s
-vector,roadNet-PA,149.093506,65.847168,55.83,single_profile_run
-vector,roadNet-TX,179.935547,89.799316,50.09,single_profile_run
-vector,roadNet-CA,250.889893,171.504395,31.64,single_profile_run
+vector,roadNet-PA,97.004545,23.586560,75.69,median_15_runs
+vector,roadNet-TX,95.880196,31.004321,67.66,median_15_runs
+vector,roadNet-CA,178.848936,45.317252,74.66,median_15_runs

@@ -70,6 +70,41 @@ for i in range(0, len(my_res), 2):
     vec_cs_errors[1].append(cs_res[i+1]['q3'] - cs_res[i+1]['time'])
     vec_nnz.append(my_res[i+1]['nnz'])
 
+indexed_vector_file = 'benchmark_vector_indexed_wsl.txt'
+if os.path.exists(indexed_vector_file):
+    indexed_my = {}
+    indexed_cs = {}
+    with open(indexed_vector_file, 'r') as f:
+        for line in f:
+            if line.startswith('RESULT_MY:') or line.startswith('RESULT_CS:'):
+                prefix, values = line.strip().split(':', 1)
+                parts = values.split(',')
+                if len(parts) < 6:
+                    continue
+                result = {
+                    'nnz': int(parts[1]),
+                    'time': float(parts[3]),
+                    'q1': float(parts[4]),
+                    'q3': float(parts[5])
+                }
+                if prefix == 'RESULT_MY':
+                    indexed_my[parts[0]] = result
+                else:
+                    indexed_cs[parts[0]] = result
+
+    for i, name in enumerate(vec_names):
+        if name not in indexed_my or name not in indexed_cs:
+            continue
+        my_result = indexed_my[name]
+        cs_result = indexed_cs[name]
+        vec_nnz[i] = my_result['nnz']
+        vec_my_times[i] = my_result['time']
+        vec_cs_times[i] = cs_result['time']
+        vec_my_errors[0][i] = my_result['time'] - my_result['q1']
+        vec_my_errors[1][i] = my_result['q3'] - my_result['time']
+        vec_cs_errors[0][i] = cs_result['time'] - cs_result['q1']
+        vec_cs_errors[1][i] = cs_result['q3'] - cs_result['time']
+
 fig, axes = plt.subplots(3, 2, figsize=(18, 24))
 fig.suptitle('Median execution time; error bars show the Q1-Q3 interval', fontsize=15, y=0.985)
 
@@ -163,7 +198,7 @@ if os.path.exists(profile_file):
     matrix_profile = [row for row in profile_rows if row['operation'] == 'matrix']
     vector_profile = [row for row in profile_rows if row['operation'] == 'vector']
     profile_fig, profile_axes = plt.subplots(1, 2, figsize=(16, 7))
-    profile_fig.suptitle('COO profiling after optimization: share of total execution time', fontsize=15, y=0.98)
+    profile_fig.suptitle('COO profiling used to select optimizations: share of total execution time', fontsize=15, y=0.98)
 
     def plot_profile(ax, rows, title, accumulation_label, include_buffer):
         names = [row['name'] for row in rows]
@@ -196,9 +231,65 @@ if os.path.exists(profile_file):
         'Product accumulation', True)
     plot_profile(
         profile_axes[1], vector_profile, 'Matrix-Vector Multiplication',
-        'Hash lookup and accumulation', False)
+        'Matrix scan, hash lookup and accumulation', False)
     profile_fig.subplots_adjust(wspace=0.25, top=0.88, bottom=0.17)
     profile_fig.savefig('profiling_graph.png', dpi=300, bbox_inches='tight')
+
+indexed_file = 'indexed_vector_results.csv'
+if os.path.exists(indexed_file):
+    with open(indexed_file, 'r', newline='') as f:
+        indexed_rows = list(csv.DictReader(f))
+
+    names = [row['matrix'] for row in indexed_rows]
+    baseline = [float(row['baseline_median_ms']) for row in indexed_rows]
+    indexed = [float(row['indexed_median_ms']) for row in indexed_rows]
+    csparse = [float(row['csparse_median_ms']) for row in indexed_rows]
+    baseline_errors = [
+        [baseline[i] - float(row['baseline_q1_ms']) for i, row in enumerate(indexed_rows)],
+        [float(row['baseline_q3_ms']) - baseline[i] for i, row in enumerate(indexed_rows)]
+    ]
+    indexed_errors = [
+        [indexed[i] - float(row['indexed_q1_ms']) for i, row in enumerate(indexed_rows)],
+        [float(row['indexed_q3_ms']) - indexed[i] for i, row in enumerate(indexed_rows)]
+    ]
+    csparse_errors = [
+        [csparse[i] - float(row['csparse_q1_ms']) for i, row in enumerate(indexed_rows)],
+        [float(row['csparse_q3_ms']) - csparse[i] for i, row in enumerate(indexed_rows)]
+    ]
+
+    indexed_fig, indexed_axes = plt.subplots(1, 2, figsize=(15, 6))
+    indexed_fig.suptitle('Sparse matrix-vector multiplication on large matrices', fontsize=15)
+    positions = list(range(len(names)))
+    bar_width = 0.36
+
+    indexed_axes[0].bar(
+        [x - bar_width / 2 for x in positions], baseline, bar_width,
+        yerr=baseline_errors, capsize=4, label='Baseline COO', color='#95a5a6')
+    indexed_axes[0].bar(
+        [x + bar_width / 2 for x in positions], indexed, bar_width,
+        yerr=indexed_errors, capsize=4, label='Indexed COO', color='#3498db')
+    indexed_axes[0].set_xticks(positions)
+    indexed_axes[0].set_xticklabels(names)
+    indexed_axes[0].set_ylabel('Median time (ms)')
+    indexed_axes[0].set_title('Effect of the optimization')
+    indexed_axes[0].grid(axis='y', alpha=0.3)
+    indexed_axes[0].legend()
+
+    indexed_axes[1].bar(
+        [x - bar_width / 2 for x in positions], indexed, bar_width,
+        yerr=indexed_errors, capsize=4, label='Indexed COO', color='#3498db')
+    indexed_axes[1].bar(
+        [x + bar_width / 2 for x in positions], csparse, bar_width,
+        yerr=csparse_errors, capsize=4, label='CSparse', color='#e74c3c')
+    indexed_axes[1].set_xticks(positions)
+    indexed_axes[1].set_xticklabels(names)
+    indexed_axes[1].set_ylabel('Median time (ms)')
+    indexed_axes[1].set_title('Final implementation and CSparse')
+    indexed_axes[1].grid(axis='y', alpha=0.3)
+    indexed_axes[1].legend()
+
+    indexed_fig.subplots_adjust(wspace=0.25, top=0.85, bottom=0.12)
+    indexed_fig.savefig('indexed_vector_comparison.png', dpi=300, bbox_inches='tight')
 
 if '--show' in sys.argv:
     plt.show()

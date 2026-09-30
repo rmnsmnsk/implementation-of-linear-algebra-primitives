@@ -12,6 +12,7 @@ void test_make_table_vector(void);
 void test_multiplication_two_matrix(void);
 void test_multiplication_matrix_and_vector(void);
 void test_multiplication_matrix_and_sparse_vector(void);
+void test_indexed_multiplication_matrix_and_sparse_vector(void);
 void test_read_symmetric_matrix_market(void);
 void test_multiplication_vector_and_matrix(void);
 void test_coo_map(void);
@@ -214,6 +215,65 @@ void test_multiplication_matrix_and_sparse_vector(void)
     free_matrix(result);
 }
 
+void test_indexed_multiplication_matrix_and_sparse_vector(void)
+{
+    int row_a[] = { 3, 0, 2, 0, 1, 1 };
+    int col_a[] = { 999999999, 5, 42, 999999999, 5, 42 };
+    float val_a[] = { 3.0f, 2.0f, 7.0f, -1.0f, 4.0f, -2.0f };
+    COO* matrix = create_matrix(6, 4, 1000000000, row_a, col_a, val_a);
+
+    int row_v[] = { 5, 999999999, 5, 123456789, 42 };
+    int col_v[] = { 0, 0, 0, 0, 0 };
+    float val_v[] = { 7.0f, 4.0f, -2.0f, 9.0f, 3.0f };
+    COO* vector = create_matrix(5, 1000000000, 1, row_v, col_v, val_v);
+
+    assert(matrix != NULL);
+    assert(vector != NULL);
+    assert(create_coo_column_index(NULL) == NULL);
+
+    COO_ColumnIndex* index = create_coo_column_index(matrix);
+    assert(index != NULL);
+
+    COO* baseline = multiplication_matrix_and_vector_coo(matrix, vector);
+    COO* indexed = multiplication_matrix_and_vector_coo_indexed(index, vector);
+    assert(baseline != NULL);
+    assert(indexed != NULL);
+    assert(matrices_equal(baseline, indexed));
+    assert(indexed->nnz == 4);
+    assert(indexed->rows_indices[0] == 0 && fabsf(indexed->values[0] - 6.0f) < 1e-5f);
+    assert(indexed->rows_indices[1] == 1 && fabsf(indexed->values[1] - 14.0f) < 1e-5f);
+    assert(indexed->rows_indices[2] == 2 && fabsf(indexed->values[2] - 21.0f) < 1e-5f);
+    assert(indexed->rows_indices[3] == 3 && fabsf(indexed->values[3] - 12.0f) < 1e-5f);
+
+    COO* repeated = multiplication_matrix_and_vector_coo_indexed(index, vector);
+    assert(repeated != NULL);
+    assert(matrices_equal(indexed, repeated));
+
+    int missing_row[] = { 17 };
+    int missing_column[] = { 0 };
+    float missing_value[] = { 2.0f };
+    COO* missing_vector = create_matrix(1, 1000000000, 1, missing_row, missing_column, missing_value);
+    COO* empty_result = multiplication_matrix_and_vector_coo_indexed(index, missing_vector);
+    assert(empty_result != NULL);
+    assert(empty_result->rows == 4 && empty_result->columns == 1 && empty_result->nnz == 0);
+
+    vector->rows--;
+    assert(multiplication_matrix_and_vector_coo_indexed(index, vector) == NULL);
+    vector->rows++;
+    vector->coll_indices[0] = 1;
+    assert(multiplication_matrix_and_vector_coo_indexed(index, vector) == NULL);
+    vector->coll_indices[0] = 0;
+
+    free_matrix(empty_result);
+    free_matrix(missing_vector);
+    free_matrix(repeated);
+    free_matrix(indexed);
+    free_matrix(baseline);
+    free_coo_column_index(index);
+    free_matrix(vector);
+    free_matrix(matrix);
+}
+
 void test_read_symmetric_matrix_market(void)
 {
     COO* matrix = read_matrix_market("matrices/dolphins.mtx");
@@ -309,6 +369,7 @@ int main(void)
     test_multiplication_two_matrix();
     test_multiplication_matrix_and_vector();
     test_multiplication_matrix_and_sparse_vector();
+    test_indexed_multiplication_matrix_and_sparse_vector();
     test_read_symmetric_matrix_market();
     test_multiplication_vector_and_matrix();
     test_coo_map();

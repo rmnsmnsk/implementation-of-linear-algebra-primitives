@@ -35,7 +35,7 @@ static COO* create_profile_vector(int size)
 int main(int argc, char** argv)
 {
     if (argc != 4) {
-        fprintf(stderr, "Usage: %s <matrix.mtx> <matrix|vector> <repetitions>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <matrix.mtx> <matrix|vector|vector-indexed> <repetitions>\n", argv[0]);
         return 1;
     }
 
@@ -53,8 +53,9 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    bool indexed_vector = strcmp(argv[2], "vector-indexed") == 0;
     COO* vector = NULL;
-    if (strcmp(argv[2], "vector") == 0) {
+    if (strcmp(argv[2], "vector") == 0 || indexed_vector) {
         vector = create_profile_vector(matrix->columns);
         if (!vector) {
             fprintf(stderr, "Failed to create vector\n");
@@ -67,12 +68,37 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    COO_ColumnIndex* column_index = NULL;
+    if (indexed_vector) {
+        column_index = create_coo_column_index(matrix);
+        if (!column_index) {
+            fprintf(stderr, "Failed to create column index\n");
+            free_matrix(vector);
+            free_matrix(matrix);
+            return 1;
+        }
+    }
+
+    if (getenv("COO_PROFILE_WAIT")) {
+        printf("READY\n");
+        fflush(stdout);
+        if (getchar() == EOF) {
+            fprintf(stderr, "Failed to wait for profiler\n");
+            free_coo_column_index(column_index);
+            free_matrix(vector);
+            free_matrix(matrix);
+            return 1;
+        }
+    }
+
     volatile long long checksum = 0;
     coo_profile_reset();
     for (long iteration = 0; iteration < repetitions; iteration++) {
-        COO* result = vector ? multiplication_matrix_and_vector_coo(matrix, vector) : multiplication_two_matrix(matrix, matrix);
+        COO* result = indexed_vector ? multiplication_matrix_and_vector_coo_indexed(column_index, vector)
+                                     : (vector ? multiplication_matrix_and_vector_coo(matrix, vector) : multiplication_two_matrix(matrix, matrix));
         if (!result) {
             fprintf(stderr, "Operation failed at iteration %ld\n", iteration);
+            free_coo_column_index(column_index);
             free_matrix(vector);
             free_matrix(matrix);
             return 1;
@@ -93,6 +119,7 @@ int main(int argc, char** argv)
     printf("CLEANUP_MS:%.6f\n", profile.cleanup_ms);
     printf("LOOKUP_CALLS:%llu\n", profile.lookup_calls);
     printf("LOOKUP_COMPARISONS:%llu\n", profile.lookup_comparisons);
+    free_coo_column_index(column_index);
     free_matrix(vector);
     free_matrix(matrix);
     return 0;

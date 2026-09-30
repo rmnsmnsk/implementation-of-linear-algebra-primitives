@@ -10,6 +10,8 @@ typedef struct COO {
     float* values; // сами значения
 } COO;
 
+typedef struct COO_ColumnIndex COO_ColumnIndex;
+
 void free_matrix(COO* matrix);
 COO* create_matrix_copy(COO* original);
 COO* sort_matrix(COO* matrix);
@@ -18,6 +20,9 @@ float* make_table_vector(COO* vector);
 
 float* multiplication_matrix_and_vector(COO* matrix, const float* vector);
 COO* multiplication_matrix_and_vector_coo(COO* matrix, COO* vector);
+COO_ColumnIndex* create_coo_column_index(const COO* matrix);
+void free_coo_column_index(COO_ColumnIndex* index);
+COO* multiplication_matrix_and_vector_coo_indexed(const COO_ColumnIndex* index, const COO* vector);
 COO* multiplication_two_matrix(COO* first, COO* second);
 COO* multiplication_vector_and_matrix(COO* first, COO* second);
 void coo_map(COO* mat, float (*func)(float));
